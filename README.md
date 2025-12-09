@@ -5,13 +5,10 @@ Minimalist web-based speed reading app using RSVP (Rapid Serial Visual Presentat
 ## Why?
 
 Inspired by this post on X:
-![6yXfGdVj6x1D7ket](https://github.com/user-attachments/assets/2984295c-dd49-4ec6-8afc-7abb72264641)
+
+<img src="https://github.com/user-attachments/assets/2984295c-dd49-4ec6-8afc-7abb72264641" width="240" height="426" />
 
 An average 250-page book will be read in about **2 hours and 5 minutes** at a reading speed of 500 words per minute.
-
-## Demo
-
-It's a serverless
 ## Features
 
 - RSVP reading with 10-word warm-up (100→500 WPM)
