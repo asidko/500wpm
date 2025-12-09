@@ -1,0 +1,889 @@
+# Speed Reading Web App - Technical Specification
+
+## Project Overview
+A web application that helps users read text faster by displaying one word at a time using the RSVP (Rapid Serial Visual Presentation) technique. The app starts with a 10-word warm-up period (ramping from 100 WPM to target speed), then maintains the user's target reading speed (default: 400 WPM, user-adjustable).
+
+## Key Architectural Decisions
+1. **Backend is Optional**: All core reading logic is in the frontend JavaScript
+2. **Fully Functional Offline**: App works completely with pasted text or uploaded .txt files (no backend needed)
+3. **Backend as Helper Service**: Backend only fetches/converts files and returns chaptered structure
+4. **Controls Hidden While Reading**: UI elements only appear when paused for distraction-free experience
+5. **IE8 + Kindle Compatible**: JavaScript compiled with Babel, CSS with no Flexbox
+6. **Chapter-Based Navigation**: EPUB files split into chapters, users can jump between chapters
+7. **Warm-up Speed Progression**: 10-word ramp from 100 WPM to target speed (default 400 WPM)
+8. **Three Input Modes**: Paste text, upload file, or enter URL
+9. **Advanced Tokenization**: URLs, numbers, and abbreviations handled as single words
+10. **Security-First**: Backend blocks private IPs, rate limits requests (20/min)
+
+## Core Features
+
+### 1. Home Page
+**Layout:**
+- Three input mode tabs/buttons: "Paste Text" | "Upload File" | "Enter URL"
+- Input area changes based on selected mode
+- "Go" / "Start Reading" button below input area
+
+**Input Modes (3 total):**
+
+**Mode 1: Paste Text**
+- Large textarea for pasting content directly
+- Placeholder: "Paste your text here and start reading..."
+- Works completely offline, no backend needed
+- All processing happens in frontend JavaScript
+- Text tokenization done in browser
+
+**Mode 2: Upload File**
+- File input button: "Choose File"
+- Supported formats: .txt, .epub
+- File processing:
+  - .txt files: Read directly in browser using FileReader API (offline)
+  - .epub files: Upload to backend for parsing and chapter extraction
+- Shows file name after selection
+
+**Mode 3: Enter URL**
+- Text input field for direct URLs to files
+- Placeholder: "https://example.com/book.epub"
+- Requires backend to be running for file fetching/conversion
+- Backend handles CORS and file downloading
+- Shows error if backend unavailable
+
+**Supported File Formats:**
+- Plain text files (.txt)
+- EPUB ebook files (.epub)
+- Note: Frontend doesn't need to know format - backend auto-detects and converts
+
+**Error Handling:**
+- If URL fails to load: Display error message on home page, allow user to correct
+- Error message should be clear and actionable
+- Stay on home page until valid input is provided
+
+### 2. Reader Page
+**Display Behavior:**
+- Show one word at a time in the exact center of the screen
+- Fixed position (word doesn't move, minimizing eye strain)
+- Minimal, distraction-free design
+- Black text on white background
+- Large, readable font size (recommended: 48-72px)
+- **IMPORTANT**: All controls and indicators are ONLY visible when paused
+- When playing: Only the current word is visible (completely distraction-free)
+- When paused: Controls and progress information fade in/appear
+
+**Speed Progression:**
+- **Warm-up Period (Words 1-10)**: Gradually ramp from 100 WPM → target speed
+  - Formula: `currentSpeed = 100 + ((targetSpeed - 100) * (currentWordIndex / 10))`
+  - Example with target 400 WPM: Word 1 = 100 WPM, Word 5 = 250 WPM, Word 10 = 400 WPM
+- **Steady Reading (Words 11+)**: Maintain target speed
+  - Default target speed: 400 WPM
+  - User can adjust target speed anytime using +/- controls (any value, no limits)
+  - If adjusted during warm-up: ramps to new target
+  - If adjusted after warm-up: changes immediately to new target
+- All words display for same duration regardless of length (no punctuation pauses)
+
+**User Controls:**
+
+*Click/Tap Controls:*
+- Click/tap anywhere on screen: Pause reading
+- Click/tap again: Resume reading
+
+*Keyboard Shortcuts:*
+- Spacebar: Pause/Resume
+- Up Arrow: Increase speed by 25 WPM
+- Down Arrow: Decrease speed by 25 WPM
+- Left Arrow: Go back 10 words
+- Right Arrow: Skip forward 10 words
+- R key: Restart from beginning
+- Escape: Return to home page
+
+*Visual Controls (ONLY visible when paused):*
+- Speed indicator showing current target WPM
+- +/- buttons for speed adjustment (any value, ±25 WPM increments)
+- Progress indicator (word X of Y)
+- Current chapter name (if multi-chapter text)
+- **Chapter List** (if multi-chapter, inline display):
+  - List of all chapters with indicators
+  - Current chapter marked/highlighted
+  - Click any chapter to jump to it (resets speed to 100 WPM warm-up)
+- Back 10 words button
+- Restart button
+- Play/Resume button
+- Close/Exit button (returns to home page)
+
+### 3. Architecture
+
+**IMPORTANT ARCHITECTURAL PRINCIPLE:**
+- **Backend is OPTIONAL** - only used for file fetching and format conversion
+- **ALL core logic is in the frontend** - tokenization, speed control, word display, timing
+- **App must work fully without backend** when using "Custom Text" mode (paste text)
+- Backend is a convenience service, not a requirement
+
+**Frontend (Core Application):**
+- Vanilla JavaScript (no frameworks)
+- Must be compiled/transpiled for IE8 compatibility
+- Use ES5 syntax or transpile with Babel
+- Fully responsive design (mobile, tablet, desktop)
+- **CSS**: NO Flexbox/Grid - use table-cell, inline-block, absolute positioning
+- **Layout approach**: CSS table display for centering, media queries via respond.js
+
+**Frontend Responsibilities (all core logic):**
+- Word tokenization and text cleaning
+- Speed progression calculation (100 → 400 WPM)
+- Word display timing and rendering
+- Pause/resume control
+- Keyboard shortcuts handling
+- Speed adjustments
+- Progress tracking
+- Navigation (restart, go back N words)
+
+**Backend (Optional File Service):**
+- FastAPI (Python)
+- **ONLY** used for:
+  1. Fetching files from URLs (to avoid CORS issues)
+  2. Auto-detecting file format
+  3. Parsing EPUB files and extracting chapter structure
+  4. Converting formats to plain text/chaptered structure
+  5. Returning structured data to frontend
+- **Single unified endpoint:**
+  - POST /api/process - Accept URL or file upload, auto-detect format, convert if needed, return chaptered text
+
+**File Processing:**
+- Backend converts formats and extracts structure:
+  - **Plain text (.txt)**: Return as single chapter
+  - **EPUB (.epub)**: Parse with ebooklib, extract chapters, filter TOC/metadata, return structured chapters
+- Frontend receives structured data and does ALL processing:
+  - Word tokenization (advanced: URLs, numbers, abbreviations as single words)
+  - Text cleaning
+  - Word array preparation
+  - Speed progression
+  - All reading logic
+
+**No Data Persistence:**
+- Each session is independent
+- No user accounts, no saved progress
+- No cookies or localStorage (except maybe for theme preferences if added later)
+
+## Technical Requirements
+
+### Browser Compatibility & Build Process
+
+**Target Browsers:**
+- Internet Explorer 8 and above
+- Modern browsers (Chrome, Firefox, Safari, Edge)
+- Kindle browsers (Experimental WebKit, Fire tablet browsers)
+- Legacy mobile browsers (old Android, iOS Safari)
+
+**Compilation Strategy: Babel + Manual Polyfills**
+
+**Development Dependencies:**
+```bash
+npm install --save-dev @babel/core @babel/cli @babel/preset-env
+```
+
+**Babel Configuration (.babelrc):**
+```json
+{
+  "presets": [
+    ["@babel/preset-env", {
+      "targets": {
+        "ie": "8"
+      },
+      "modules": false,
+      "useBuiltIns": false
+    }]
+  ]
+}
+```
+
+**Build Scripts (package.json):**
+```json
+{
+  "scripts": {
+    "build": "babel src/app.js --out-file dist/app.js",
+    "build:min": "babel src/app.js --out-file dist/app.min.js --minified",
+    "watch": "babel src/app.js --watch --out-file dist/app.js",
+    "build:all": "npm run build && npm run build:min"
+  }
+}
+```
+
+**Manual Polyfills Required:**
+Include these polyfills in a separate `polyfills.js` file (load before main app):
+- `Array.prototype.forEach` - for array iteration
+- `Array.prototype.map` - for array transformation
+- `Array.prototype.filter` - for array filtering
+- `Array.prototype.indexOf` - for array searching
+- `Object.keys` - for object key iteration
+- `Function.prototype.bind` - for function context binding
+- `console` shim - IE8 has no console when dev tools closed
+- `XMLHttpRequest` - ensure proper CORS handling (or use XDomainRequest for IE8/9)
+
+**Alternative: Use es5-shim.js**
+Include `es5-shim.min.js` (CDN or local) for comprehensive ES5 polyfills:
+```html
+<!--[if lt IE 9]>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/es5-shim/4.5.15/es5-shim.min.js"></script>
+<![endif]-->
+```
+
+**Babel Transforms (automatic):**
+- Arrow functions → regular functions
+- Let/const → var
+- Template literals → string concatenation
+- Destructuring → individual assignments
+- Default parameters → manual checks
+- Spread operator → Array.prototype.slice
+- Classes → constructor functions
+
+### IE8-Specific Gotchas & Solutions
+
+**Critical IE8 Issues:**
+
+1. **No `console` object when dev tools closed**
+   ```javascript
+   // Add at top of polyfills.js
+   if (!window.console) {
+     window.console = {
+       log: function() {},
+       error: function() {},
+       warn: function() {}
+     };
+   }
+   ```
+
+2. **Event listeners: Use `attachEvent` instead of `addEventListener`**
+   ```javascript
+   function addEvent(element, event, handler) {
+     if (element.addEventListener) {
+       element.addEventListener(event, handler, false);
+     } else if (element.attachEvent) {
+       element.attachEvent('on' + event, handler);
+     }
+   }
+   ```
+
+3. **No CORS support: Backend must handle it**
+   - IE8/9 use `XDomainRequest` instead of `XMLHttpRequest` for CORS
+   - Backend should set proper CORS headers
+   - Or use JSONP as fallback
+
+4. **No `JSON.parse/stringify` (or buggy)**
+   - Include json2.js polyfill
+   - Or use es5-shim which includes it
+
+5. **No `Array.isArray`**
+   ```javascript
+   Array.isArray = Array.isArray || function(obj) {
+     return Object.prototype.toString.call(obj) === '[object Array]';
+   };
+   ```
+
+6. **No `String.prototype.trim`**
+   ```javascript
+   if (!String.prototype.trim) {
+     String.prototype.trim = function() {
+       return this.replace(/^\s+|\s+$/g, '');
+     };
+   }
+   ```
+
+7. **CSS Issues (IE8 & Kindle):**
+   - **No Flexbox** - use table-cell, inline-block, or absolute positioning
+   - **No CSS Grid** - use table layout or floats
+   - **No media queries** - use respond.js polyfill or separate stylesheets
+   - **No CSS transforms/transitions** - graceful degradation
+   - **No viewport units** (vh, vw) - use percentages or JavaScript
+   - **Limited CSS3** - no border-radius, box-shadow on Kindle
+
+   **Centering Techniques for Old Browsers:**
+   ```css
+   /* Horizontal centering */
+   .container {
+     text-align: center;
+   }
+   .element {
+     display: inline-block;
+     /* or */
+     margin: 0 auto;
+     width: 80%;
+   }
+
+   /* Vertical centering - Method 1: Table cell */
+   .wrapper {
+     display: table;
+     width: 100%;
+     height: 100%;
+   }
+   .centered {
+     display: table-cell;
+     vertical-align: middle;
+     text-align: center;
+   }
+
+   /* Vertical centering - Method 2: Absolute positioning */
+   .centered {
+     position: absolute;
+     top: 50%;
+     left: 50%;
+     transform: translate(-50%, -50%); /* Won't work in IE8/Kindle */
+     /* Fallback: */
+     margin-left: -width/2;  /* Half of element width */
+     margin-top: -height/2;   /* Half of element height */
+   }
+   ```
+
+8. **Kindle-Specific Issues:**
+   - E-ink displays: Avoid animations (cause ghosting)
+   - Limited memory: Keep DOM simple
+   - Slow rendering: Minimize reflows/repaints
+   - Monochrome displays (older Kindles): Use high contrast
+   - Touch events limited: Use click events instead
+   - No localStorage on some models: Don't rely on it
+
+**Development Workflow:**
+
+1. **Write modern JS in `src/` directory:**
+   ```javascript
+   // src/app.js - write with modern syntax
+   const words = textContent.split(/\s+/);
+   const displayWord = (word) => {
+     document.getElementById('word').textContent = word;
+   };
+   ```
+
+2. **Run build command:**
+   ```bash
+   npm run watch  # During development (auto-rebuilds)
+   npm run build  # For production
+   ```
+
+3. **Babel outputs to `dist/`:**
+   ```javascript
+   // dist/app.js - transpiled ES5
+   var words = textContent.split(/\s+/);
+   var displayWord = function(word) {
+     document.getElementById('word').textContent = word;
+   };
+   ```
+
+4. **HTML loads transpiled version:**
+   ```html
+   <script src="polyfills.js"></script>
+   <script src="dist/app.js"></script>
+   ```
+
+**Project Structure:**
+```
+/project-root
+  /src
+    app.js           # Modern JS source
+  /dist
+    app.js           # Transpiled ES5 (generated)
+    app.min.js       # Minified version (generated)
+  polyfills.js       # Manual polyfills
+  index.html         # Home page
+  reader.html        # Reader page
+  styles.css         # Styles with IE8 fallbacks
+  .babelrc           # Babel config
+  package.json       # Build scripts
+```
+
+### Responsive Design Breakpoints
+- Mobile: < 768px - Full screen word display, controls at bottom
+- Tablet: 768px - 1024px - Optimized touch targets
+- Desktop: > 1024px - Keyboard shortcuts emphasized
+
+### Performance Considerations
+- Word display timing must be precise (use setTimeout or requestAnimationFrame)
+- Preload all words before starting reader
+- Smooth transitions between words (no flicker)
+- Fast initial load time
+- Chapter structure stored in memory (acceptable for most texts < 100k words)
+
+### Typography & Font Specifications
+
+**Word Display Font:**
+```css
+#word {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
+               'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 4vw;  /* Responsive: 4% of viewport width */
+  font-weight: 700; /* Bold for better readability at speed */
+  color: #000;
+  text-align: center;
+  letter-spacing: 0.05em; /* Slight spacing aids readability */
+}
+```
+
+**Benefits of system font stack:**
+- **macOS/iOS**: Uses San Francisco (native)
+- **Windows**: Uses Segoe UI (native)
+- **Android**: Uses Roboto (native)
+- **Fallback**: Arial, Helvetica, sans-serif
+- No web font loading delay
+- Consistent with OS design language
+- Better performance
+
+## UI/UX Specifications
+
+### Home Page Design
+
+**Mode Tabs:**
+```
+┌─────────────────────────────────────────┐
+│                                         │
+│          500 WPM Reader                 │
+│                                         │
+│  [Paste Text] [Upload File] [Enter URL]│
+│  ─────────────────────────────────────  │
+│    ┌─────────────────────────────┐     │
+│    │ Paste your text here...     │     │
+│    │                             │     │
+│    │                             │     │
+│    └─────────────────────────────┘     │
+│                                         │
+│          [ Start Reading ]              │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+**Upload File Mode:**
+```
+┌─────────────────────────────────────────┐
+│          500 WPM Reader                 │
+│                                         │
+│  [Paste Text] [Upload File] [Enter URL]│
+│               ───────────                │
+│                                         │
+│         [ Choose File ]                 │
+│                                         │
+│         book.epub (125 KB)              │
+│                                         │
+│          [ Start Reading ]              │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+**Enter URL Mode:**
+```
+┌─────────────────────────────────────────┐
+│          500 WPM Reader                 │
+│                                         │
+│  [Paste Text] [Upload File] [Enter URL]│
+│                             ───────────  │
+│    ┌─────────────────────────────┐     │
+│    │ https://example.com/book... │     │
+│    └─────────────────────────────┘     │
+│                                         │
+│          [ Start Reading ]              │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+### Reader Page Design
+
+**Playing State (controls hidden):**
+```
+┌─────────────────────────────────────────┐
+│                                         │
+│                                         │
+│                                         │
+│               WORD                      │
+│                                         │
+│                                         │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+**Paused State - Single Chapter (controls visible):**
+```
+┌─────────────────────────────────────────┐
+│  400 WPM  [−] [+]    Word 145/2458     │
+│                                         │
+│                                         │
+│               WORD                      │
+│              (Paused)                   │
+│                                         │
+│  [⟲ Restart]  [← 10]  [▶ Play]  [✕]   │
+└─────────────────────────────────────────┘
+```
+
+**Paused State - Multi-Chapter (with chapter list):**
+```
+┌─────────────────────────────────────────┐
+│  400 WPM  [−] [+]    Word 687/2458     │
+│         Chapter 2: The Journey          │
+│                                         │
+│               WORD                      │
+│              (Paused)                   │
+│                                         │
+│  Chapters:                              │
+│  □ Chapter 1: The Beginning             │
+│  ■ Chapter 2: The Journey (current)     │
+│  □ Chapter 3: The End                   │
+│                                         │
+│  [⟲ Restart]  [← 10]  [▶ Play]  [✕]   │
+└─────────────────────────────────────────┘
+```
+
+**Chapter Complete Screen:**
+```
+┌─────────────────────────────────────────┐
+│                                         │
+│    ✓ Chapter 1: The Beginning          │
+│           Complete!                     │
+│                                         │
+│     [Next Chapter]  [Chapters]  [Home] │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+**Reading Complete Screen:**
+```
+┌─────────────────────────────────────────┐
+│                                         │
+│         ✓ Reading Complete!             │
+│                                         │
+│         Words read: 2,458               │
+│         Time taken: 8m 34s              │
+│                                         │
+│          [Restart]    [Home]            │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+### Visual States
+- **Playing**:
+  - Only the current word is visible in center of screen
+  - Word changes at calculated interval based on current speed
+  - No controls, indicators, or UI elements visible
+  - Completely clean, distraction-free display
+
+- **Paused** (user-initiated):
+  - Current word frozen in place
+  - All controls and indicators fade in/become visible (instant on Kindle/IE8)
+  - Speed indicator (current target WPM) shown
+  - Progress indicator shown (word X of Y)
+  - Current chapter name displayed (if multi-chapter)
+  - Chapter list visible inline (if multi-chapter)
+  - Control buttons visible (+/-, back 10, restart, play, close)
+  - Note: Use CSS transitions for modern browsers, instant show/hide for IE8/Kindle
+
+- **Chapter Complete** (multi-chapter texts only):
+  - Stop reading, show completion screen
+  - Display: "✓ Chapter X: [Chapter Name] - Complete!"
+  - Buttons: [Next Chapter] [Chapters List] [Home]
+  - Wait for user action (don't auto-continue)
+
+- **Reading Complete** (end of all chapters/text):
+  - Stop reading, show completion stats screen
+  - Display:
+    ```
+    ✓ Reading Complete!
+
+    Words read: 2,458
+    Time taken: 8m 34s
+
+    [Restart] [Home]
+    ```
+
+- **Loading**:
+  - Spinner or loading message while fetching/processing file
+  - Shown before reader begins
+
+- **Error**:
+  - Clear error message with option to go back
+  - Displayed on home page
+
+## Implementation Details
+
+### Controls Visibility Toggle
+**Critical UX Feature:**
+- When reading starts (playing state), immediately hide all UI elements
+- Only the current word remains visible
+- When user pauses (click, spacebar, or any keyboard shortcut):
+  - Stop word progression
+  - Fade in/show all controls and indicators smoothly (recommend 200-300ms transition)
+  - Display current position, speed, and control buttons
+- When user resumes:
+  - Fade out/hide all controls
+  - Resume word progression after fade completes
+
+**Implementation Approach:**
+- Use CSS classes: `.playing` (controls hidden) and `.paused` (controls visible)
+- Apply CSS transitions for smooth fade in/out on modern browsers
+- Use feature detection for transitions:
+  ```javascript
+  var supportsTransitions = (function() {
+    var style = document.createElement('div').style;
+    return 'transition' in style || 'WebkitTransition' in style;
+  })();
+  ```
+- If no transition support (IE8/Kindle): instant show/hide (display: none/block)
+- Keyboard shortcuts work in both states (always listening)
+- Mouse click area remains full screen even when controls hidden
+
+### Word Tokenization (Advanced)
+**Basic Rules:**
+- Split text primarily by whitespace
+- Remove excessive whitespace and normalize line breaks
+- Preserve punctuation attached to words
+
+**Advanced Handling (keep as single words):**
+- **URLs**: `https://example.com/page` = 1 word
+- **Email addresses**: `user@example.com` = 1 word
+- **Phone numbers**: `555-123-4567` or `(555) 123-4567` = 1 word
+- **Numbers with formatting**: `1,234.56` or `$99.99` = 1 word
+- **Abbreviations**: `Dr. Smith` = 2 words, but handle common abbreviations (Dr., Mr., Mrs., etc.) to not trigger sentence pause
+- **Hyphenated words**: `well-known` = 1 word
+- **Contractions**: `it's`, `don't`, `we'll` = 1 word each
+- **Em-dashes**: Split on em-dashes (—), treat as word boundary
+- **Ellipsis**: `Wait...` = 1 word with punctuation
+
+**Tokenization Algorithm:**
+1. Detect and preserve URLs, emails, phone numbers as single tokens
+2. Split remaining text by whitespace
+3. Keep punctuation attached to words
+4. No special pause handling for punctuation (constant timing)
+
+### Speed Calculation
+```javascript
+// Target speed (default 400 WPM, user-adjustable)
+var targetSpeed = 400;
+
+// Calculate current speed based on word position
+function getCurrentSpeed(wordIndex, targetSpeed) {
+  if (wordIndex < 10) {
+    // Warm-up period: ramp from 100 to targetSpeed over first 10 words
+    return 100 + ((targetSpeed - 100) * (wordIndex / 10));
+  } else {
+    // Steady reading: maintain target speed
+    return targetSpeed;
+  }
+}
+
+// Convert WPM to milliseconds per word
+function getIntervalMs(wpm) {
+  return 60000 / wpm;
+}
+```
+
+**Examples with targetSpeed = 400 WPM:**
+- Word 1: 100 WPM = 600ms per word (warm-up start)
+- Word 5: 250 WPM = 240ms per word (mid warm-up)
+- Word 10: 400 WPM = 150ms per word (warm-up end)
+- Word 11+: 400 WPM = 150ms per word (steady)
+
+**Examples with targetSpeed = 600 WPM:**
+- Word 1: 100 WPM = 600ms per word
+- Word 5: 350 WPM = 171ms per word
+- Word 10: 600 WPM = 100ms per word
+- Word 11+: 600 WPM = 100ms per word
+
+### Backend API Specifications
+
+**POST /api/process** (Single Unified Endpoint)
+
+Accepts: URL string or multipart file upload
+
+```json
+Request (URL mode):
+{
+  "url": "https://example.com/book.epub"
+}
+
+Request (File upload mode):
+multipart/form-data with file field
+
+Response (success - plain text):
+{
+  "success": true,
+  "chapters": [
+    {
+      "title": "Untitled",
+      "text": "The full text content...",
+      "word_count": 2458
+    }
+  ],
+  "total_words": 2458,
+  "source": "book.txt",
+  "format": "txt"
+}
+
+Response (success - multi-chapter EPUB):
+{
+  "success": true,
+  "chapters": [
+    {
+      "title": "Chapter 1: The Beginning",
+      "text": "It was a dark and stormy night...",
+      "word_count": 523
+    },
+    {
+      "title": "Chapter 2: The Journey",
+      "text": "The next morning arrived...",
+      "word_count": 687
+    },
+    {
+      "title": "Chapter 3: The End",
+      "text": "Finally, the end came...",
+      "word_count": 1248
+    }
+  ],
+  "total_words": 2458,
+  "source": "book.epub",
+  "format": "epub"
+}
+
+Response (error - file not found):
+{
+  "success": false,
+  "error": "File not found",
+  "message": "The URL could not be accessed. Please check the link."
+}
+
+Response (error - unsupported format):
+{
+  "success": false,
+  "error": "Unsupported format",
+  "message": "File format '.pdf' is not currently supported. Supported: .txt, .epub"
+}
+
+Response (error - parsing failed):
+{
+  "success": false,
+  "error": "Parse error",
+  "message": "The file could not be parsed. It may be corrupted or invalid."
+}
+
+Response (error - blocked URL):
+{
+  "success": false,
+  "error": "Invalid URL",
+  "message": "Private IPs and localhost are not allowed for security reasons."
+}
+```
+
+**Backend Processing Logic:**
+1. Accept URL or file upload from frontend
+2. **Security validation** (for URLs):
+   - Only allow HTTP/HTTPS protocols
+   - Block private IP ranges: 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+   - Block localhost, internal domains
+   - Set 10-second timeout for requests
+   - Enforce 10MB max file size
+3. Fetch file from URL or read uploaded file
+4. Detect format by:
+   - File extension (.txt, .epub, etc.)
+   - Content-Type header
+   - File magic bytes if ambiguous
+5. Process based on format:
+   - **`.txt`**: Return as single chapter with title "Untitled"
+   - **`.epub`**: Parse with ebooklib, extract chapters, filter out TOC/metadata/footnotes, return structured chapters
+   - **`.pdf`**: (Future) Parse with pdfplumber, extract text
+   - **`.html`**: (Future) Extract main content, strip tags
+6. Return chaptered structure to frontend
+
+**Rate Limiting:**
+- 20 requests per minute per IP address
+- Return 429 Too Many Requests if exceeded
+
+**Note:** Backend returns structured chapter data. Frontend is responsible for:
+- Advanced word tokenization (URLs, numbers, abbreviations)
+- Speed progression calculation
+- Word timing and display
+- All UI logic
+
+## Future Enhancements (Out of Scope for V1)
+- Word complexity-based speed adjustment
+- Punctuation pause handling
+- Optimal Recognition Point (ORP) highlighting
+- Previous/next word preview
+- Dark theme
+- Progress saving
+- PDF support
+- HTML article extraction
+- Reading statistics
+- Speed presets
+- Bookmarks
+
+## Development Phases
+
+### Phase 1: Core Frontend (Works Standalone)
+- Home page with custom text textarea
+- Text tokenization logic in JavaScript
+- Basic reader page with word display
+- Word timing and speed progression (100-400 WPM)
+- Manual speed control (play/pause, speed adjust)
+- Keyboard shortcuts
+- Controls visibility toggle (show only when paused)
+- **At this point, app is fully functional without backend**
+
+### Phase 2: Backend Service (Optional)
+- FastAPI setup with CORS enabled
+- Single unified endpoint: POST /api/process
+- File format auto-detection logic
+- Plain text file support (passthrough)
+- EPUB parsing and conversion (ebooklib)
+- Comprehensive error handling (404, parse errors, unsupported formats)
+- File size limits (10MB max recommended)
+
+### Phase 3: Integration & Polish
+- Integrate URL mode with backend
+- Add URL/custom text toggle on home page
+- Backend availability detection
+- Error handling for backend unavailable
+- Responsive design refinement
+
+### Phase 4: IE8 Compatibility
+- Transpile JavaScript to ES5
+- Add polyfills (XMLHttpRequest, etc.)
+- Test on IE8/legacy browsers
+- CSS fallbacks for Flexbox/Grid
+
+## Testing Requirements
+
+**Frontend (Standalone) Testing:**
+- Test custom text mode with various text lengths (100 words, 10000 words, 100000 words)
+- Verify word tokenization handles punctuation, contractions, hyphenated words correctly
+- Test timing accuracy at different speeds (100 WPM, 250 WPM, 400 WPM)
+- Test keyboard shortcuts (spacebar, arrows, R, Escape)
+- Test click to pause/resume
+- Verify controls appear/disappear correctly when pausing/resuming
+- Test speed progression formula accuracy
+- Test responsive breakpoints (mobile, tablet, desktop)
+- Test on IE8, Chrome, Firefox, Safari, Mobile Safari, Chrome Android
+- **Critical**: Test on Kindle browsers (Kindle Paperwhite, Kindle Fire, experimental browser)
+- Test on old Android browsers (Android 4.x stock browser)
+
+**Backend Integration Testing:**
+- Test URL fetching for plain text files
+- Test EPUB conversion and text extraction
+- Test error scenarios (404, CORS, invalid formats, backend unavailable)
+- Test graceful degradation when backend is down
+- Verify app still works in custom text mode when backend unavailable
+
+**Performance Testing:**
+- Verify smooth word transitions with no flicker
+- Test with very long texts (100k+ words)
+- Ensure no memory leaks during extended reading sessions
+
+## Deployment Considerations
+
+**Frontend (Required):**
+- Static frontend files (HTML, CSS, JS) - can be hosted anywhere
+- Can be deployed to: GitHub Pages, Netlify, Vercel, or any static hosting
+- Works completely standalone with custom text mode
+- No server required for basic functionality
+
+**Backend (Optional):**
+- FastAPI backend with CORS enabled
+- Only needed for URL fetching and EPUB conversion features
+- Can be deployed separately from frontend
+- Environment variables for configuration
+- File size limits for uploaded/fetched content (recommend 10MB max)
+- Rate limiting on API endpoints to prevent abuse
+- CORS handling for cross-origin file fetching
+
+**Deployment Strategies:**
+1. **Frontend Only**: Deploy just HTML/CSS/JS - users can paste text or upload .txt files
+2. **Frontend + Backend**: Full feature set with URL and EPUB support
+3. **Distributed**: Frontend on CDN, backend on serverless (AWS Lambda, etc.)

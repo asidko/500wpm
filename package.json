@@ -1,0 +1,19 @@
+{
+  "name": "500wpm-speed-reader",
+  "version": "1.0.0",
+  "description": "Speed reading web app with RSVP technique",
+  "scripts": {
+    "build": "babel src/app.js --out-file dist/app.js",
+    "build:min": "babel src/app.js --out-file dist/app.min.js --minified",
+    "watch": "babel src/app.js --watch --out-file dist/app.js",
+    "build:all": "npm run build && npm run build:min"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.23.0",
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0"
+  },
+  "keywords": ["speed-reading", "rsvp", "ebook-reader"],
+  "author": "",
+  "license": "MIT"
+}

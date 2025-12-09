@@ -1,0 +1,9 @@
+The quick brown fox jumps over the lazy dog. This is a test sentence to verify the speed reading application works correctly. The application should display one word at a time, starting with a warm-up period of 10 words ramping from 100 WPM to the target speed of 400 WPM.
+
+After the warm-up, the reading speed should remain constant at 400 WPM by default. Users can adjust the speed using the plus and minus buttons, or by using the up and down arrow keys.
+
+The tokenization algorithm should handle URLs like https://example.com/page as single words. It should also handle email addresses like user@example.com and phone numbers like 555-123-4567 as single tokens.
+
+Numbers with formatting such as $1,234.56 or 99.99% should be kept together. Hyphenated words like well-known should remain as single words, and contractions like don't or it's should also stay together.
+
+This text contains enough content to test the basic reading functionality without being too long. The app should work smoothly and display words at the correct intervals based on the speed progression formula.

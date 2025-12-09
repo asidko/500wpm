@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  speed-reader:
+    build: .
+    container_name: speed-reader
+    ports:
+      - "3000:3000"  # Frontend
+      - "8000:8000"  # Backend API
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

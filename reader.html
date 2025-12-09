@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reading - Speed Reader</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="reader-container reader playing" id="readerContainer">
+    <!-- Top controls (hidden when playing) -->
+    <div class="reader-controls">
+      <div class="speed-control">
+        <button class="speed-button" id="decreaseSpeed">-</button>
+        <span class="speed-display" id="speedDisplay">500 WPM</span>
+        <button class="speed-button" id="increaseSpeed">+</button>
+      </div>
+    </div>
+
+    <!-- Word display area -->
+    <div class="reader-content">
+      <div id="wordDisplay">Ready</div>
+      <div class="paused-indicator">(Paused)</div>
+      <div class="progress-display" id="progressDisplay">0%</div>
+      <div class="chapter-info" id="chapterInfo"></div>
+
+      <!-- Completion message -->
+      <div class="completion-message" id="completionMessage">
+        <div class="completion-text">Reading Complete!</div>
+        <div class="completion-stats-inline">
+          <div>Words read: <span id="totalWordsInline">0</span></div>
+          <div>Time taken: <span id="timeTakenInline">0m 0s</span></div>
+        </div>
+      </div>
+
+      <!-- Chapter list (for multi-chapter texts) -->
+      <div class="chapter-list" id="chapterList">
+        <div class="chapter-list-title">Chapters:</div>
+        <div id="chapterItems"></div>
+      </div>
+    </div>
+
+    <!-- Bottom controls (hidden when playing) -->
+    <div class="bottom-controls">
+      <button class="control-button" id="restartButton">↻ Restart</button>
+      <button class="control-button" id="backButton">← 10</button>
+      <button class="control-button primary" id="playPauseButton">▶ Play</button>
+      <button class="control-button" id="forwardButton">10 →</button>
+      <button class="control-button" id="closeButton">✕ Close</button>
+    </div>
+  </div>
+
+  <!-- Chapter complete screen -->
+  <div class="completion-screen" id="chapterCompleteScreen">
+    <div class="completion-content">
+      <div class="completion-title" id="chapterCompleteTitle">✓ Chapter Complete!</div>
+      <div class="completion-buttons">
+        <button class="control-button primary" id="nextChapterButton">Next Chapter</button>
+        <button class="control-button" id="chaptersButton">Chapters</button>
+        <button class="control-button" id="homeFromChapter">Home</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reading complete screen -->
+  <div class="completion-screen" id="readingCompleteScreen">
+    <div class="completion-content">
+      <div class="completion-title">✓ Reading Complete!</div>
+      <div class="completion-stats">
+        <div>Words read: <span id="totalWords">0</span></div>
+        <div>Time taken: <span id="timeTaken">0m 0s</span></div>
+      </div>
+      <div class="completion-buttons">
+        <button class="control-button primary" id="restartFromComplete">Restart</button>
+        <button class="control-button" id="homeFromComplete">Home</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="polyfills.js"></script>
+  <script src="dist/app.js"></script>
+</body>
+</html>

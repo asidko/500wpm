@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speed Reader</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="home-container">
+    <div class="home-content">
+      <h1 class="app-title">Speed Reader</h1>
+
+      <!-- Input mode tabs -->
+      <div class="mode-tabs">
+        <button class="mode-tab active" data-mode="paste">Paste Text</button>
+        <button class="mode-tab" data-mode="upload">Upload File</button>
+        <button class="mode-tab" data-mode="url">Enter URL</button>
+      </div>
+
+      <!-- Input area -->
+      <div class="input-area">
+        <!-- Paste text mode -->
+        <div id="pasteMode" class="input-mode active">
+          <textarea id="pasteText" placeholder="Paste your text here and start reading..."></textarea>
+        </div>
+
+        <!-- Upload file mode -->
+        <div id="uploadMode" class="input-mode">
+          <div class="file-upload-area">
+            <div class="file-input-wrapper">
+              <input type="file" id="fileInput" accept=".txt,.epub">
+              <label for="fileInput" class="file-button">Choose File</label>
+            </div>
+            <div class="file-info" id="fileInfo">No file selected</div>
+          </div>
+        </div>
+
+        <!-- URL input mode -->
+        <div id="urlMode" class="input-mode">
+          <input type="text" id="urlInput" placeholder="https://example.com/book.epub">
+        </div>
+      </div>
+
+      <!-- Error message -->
+      <div class="error-message" id="errorMessage"></div>
+
+      <!-- Loading indicator -->
+      <div class="loading" id="loading">Loading...</div>
+
+      <!-- Start button -->
+      <button class="start-button" id="startButton">Start Reading</button>
+    </div>
+  </div>
+
+  <script src="polyfills.js"></script>
+  <script src="dist/app.js"></script>
+</body>
+</html>
