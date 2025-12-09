@@ -774,98 +774,10 @@ function initReaderPage() {
 }
 
 // ============================================================================
-// THEME DETECTION - Pure JS Color Inversion (Old Browser Compatible)
-// ============================================================================
-
-function invertColor(hex) {
-  // Convert hex to RGB
-  hex = hex.replace('#', '');
-  var r = parseInt(hex.substr(0, 2), 16);
-  var g = parseInt(hex.substr(2, 2), 16);
-  var b = parseInt(hex.substr(4, 2), 16);
-
-  // Invert
-  r = 255 - r;
-  g = 255 - g;
-  b = 255 - b;
-
-  // Convert back to hex
-  return '#' +
-    ('0' + r.toString(16)).slice(-2) +
-    ('0' + g.toString(16)).slice(-2) +
-    ('0' + b.toString(16)).slice(-2);
-}
-
-function applyColorScheme(isDark) {
-  var body = document.body;
-  var html = document.documentElement;
-
-  if (isDark) {
-    // Dark theme colors (inverted)
-    body.style.background = '#1a1a1a';
-    body.style.color = '#e0e0e0';
-    html.style.background = '#1a1a1a';
-  } else {
-    // Light theme colors (original)
-    body.style.background = '#fff';
-    body.style.color = '#000';
-    html.style.background = '#fff';
-  }
-
-  // Apply to all elements that need color changes
-  var elements = {
-    '.mode-tab': { bg: isDark ? '#2a2a2a' : '#f0f0f0', color: isDark ? '#e0e0e0' : '#000', border: isDark ? '#444' : '#ddd' },
-    '.mode-tab.active': { bg: isDark ? '#fff' : '#000', color: isDark ? '#000' : '#fff', border: isDark ? '#fff' : '#000' },
-    '#pasteText, #urlInput': { bg: isDark ? '#2a2a2a' : '#fff', color: isDark ? '#e0e0e0' : '#000', border: isDark ? '#444' : '#ddd' },
-    '.file-upload-area': { border: isDark ? '#444' : '#ddd' },
-    '.file-button, .start-button, .speed-button, .control-button': { bg: isDark ? '#fff' : '#000', color: isDark ? '#000' : '#fff' },
-    '#wordDisplay, .app-title': { color: isDark ? '#e0e0e0' : '#000' },
-    '.reader-controls, .bottom-controls': { bg: isDark ? 'rgba(26, 26, 26, 0.95)' : 'rgba(255, 255, 255, 0.95)', border: isDark ? '#444' : '#ddd' },
-    '.paused-indicator, .progress-display': { color: isDark ? '#999' : '#666' },
-    '.chapter-list': { bg: isDark ? '#2a2a2a' : '#f9f9f9', border: isDark ? '#444' : '#ddd' },
-    '.chapter-item': { bg: isDark ? '#333' : '#fff', color: isDark ? '#e0e0e0' : '#000', border: isDark ? '#444' : '#ddd' }
-  };
-
-  for (var selector in elements) {
-    var els = document.querySelectorAll(selector);
-    var colors = elements[selector];
-    for (var i = 0; i < els.length; i++) {
-      if (colors.bg) els[i].style.background = colors.bg;
-      if (colors.color) els[i].style.color = colors.color;
-      if (colors.border) els[i].style.borderColor = colors.border;
-    }
-  }
-}
-
-function detectAndApplyTheme() {
-  // Check for dark mode preference
-  var darkModeQuery = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
-
-  if (darkModeQuery) {
-    applyColorScheme(darkModeQuery.matches);
-
-    // Listen for theme changes
-    if (darkModeQuery.addEventListener) {
-      darkModeQuery.addEventListener('change', function(e) {
-        applyColorScheme(e.matches);
-      });
-    } else if (darkModeQuery.addListener) {
-      // Fallback for older browsers
-      darkModeQuery.addListener(function(e) {
-        applyColorScheme(e.matches);
-      });
-    }
-  }
-}
-
-// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
 addEvent(window, 'load', function() {
-  // Apply theme first
-  detectAndApplyTheme();
-
   // Detect which page we're on
   if (document.getElementById('startButton')) {
     initHomePage();

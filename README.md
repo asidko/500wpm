@@ -11,7 +11,6 @@ Minimalist web-based speed reading app using RSVP (Rapid Serial Visual Presentat
 - Keyboard shortcuts: `Space` (play/pause), `↑↓` (speed), `←→` (navigate)
 - **Kindle & e-ink friendly** - optimized for e-readers with minimal refresh
 - **Old browser support** - works on IE8+, Kindle browsers, legacy devices
-- Auto theme detection
 
 ## Quick Start
 
