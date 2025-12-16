@@ -4,6 +4,16 @@
  */
 
 // ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+var API_BASE_URL = function () {
+  // Use current origin for API calls
+  var loc = window.location;
+  return loc.protocol + '//' + loc.host;
+}();
+
+// ============================================================================
 // TOKENIZATION & TEXT PROCESSING
 // ============================================================================
 
@@ -28,7 +38,7 @@ function tokenizeText(text) {
   var placeholders = [];
   var placeholderIndex = 0;
   text = text.replace(urlPattern, function (match) {
-    var placeholder = "__URL_".concat(placeholderIndex, "__");
+    var placeholder = '__URL_' + placeholderIndex + '__';
     placeholders.push({
       placeholder: placeholder,
       original: match
@@ -37,7 +47,7 @@ function tokenizeText(text) {
     return placeholder;
   });
   text = text.replace(emailPattern, function (match) {
-    var placeholder = "__EMAIL_".concat(placeholderIndex, "__");
+    var placeholder = '__EMAIL_' + placeholderIndex + '__';
     placeholders.push({
       placeholder: placeholder,
       original: match
@@ -46,7 +56,7 @@ function tokenizeText(text) {
     return placeholder;
   });
   text = text.replace(phonePattern, function (match) {
-    var placeholder = "__PHONE_".concat(placeholderIndex, "__");
+    var placeholder = '__PHONE_' + placeholderIndex + '__';
     placeholders.push({
       placeholder: placeholder,
       original: match
@@ -55,7 +65,7 @@ function tokenizeText(text) {
     return placeholder;
   });
   text = text.replace(numberPattern, function (match) {
-    var placeholder = "__NUMBER_".concat(placeholderIndex, "__");
+    var placeholder = '__NUMBER_' + placeholderIndex + '__';
     placeholders.push({
       placeholder: placeholder,
       original: match
@@ -127,10 +137,47 @@ function formatTime(ms) {
 }
 
 // ============================================================================
+// CODE EXTRACTION
+// ============================================================================
+
+/**
+ * Extract the last continuous sequence of digits (6+) from any input
+ * Handles: "847291", "https://site.com/847291", "code is 847291", etc.
+ */
+function extractCodeFromInput(input) {
+  if (!input) return '';
+  var lastSequence = '';
+  var currentSequence = '';
+  for (var i = 0; i < input.length; i++) {
+    var c = input.charAt(i);
+    if (c >= '0' && c <= '9') {
+      currentSequence += c;
+    } else {
+      if (currentSequence.length >= 6) {
+        lastSequence = currentSequence;
+      }
+      currentSequence = '';
+    }
+  }
+
+  // Check final sequence
+  if (currentSequence.length >= 6) {
+    lastSequence = currentSequence;
+  }
+  return lastSequence;
+}
+
+// ============================================================================
 // HOME PAGE CONTROLLER
 // ============================================================================
 
 function initHomePage() {
+  // Check if we're on a direct code route (e.g., /847291)
+  var pathCode = extractCodeFromInput(window.location.pathname);
+  if (pathCode) {
+    fetchBookByCode(pathCode);
+    return;
+  }
   var modeTabs = document.querySelectorAll('.mode-tab');
   var inputModes = document.querySelectorAll('.input-mode');
   var startButton = document.getElementById('startButton');
@@ -138,6 +185,9 @@ function initHomePage() {
   var fileInfo = document.getElementById('fileInfo');
   var errorMessage = document.getElementById('errorMessage');
   var loading = document.getElementById('loading');
+  var successMessage = document.getElementById('successMessage');
+  var bookCode = document.getElementById('bookCode');
+  var bookLink = document.getElementById('bookLink');
   var currentMode = 'paste';
   var selectedFile = null;
 
@@ -154,13 +204,14 @@ function initHomePage() {
       this.className = 'mode-tab active';
 
       // Update input areas
-      for (var _j = 0; _j < inputModes.length; _j++) {
-        inputModes[_j].className = 'input-mode';
+      for (var j = 0; j < inputModes.length; j++) {
+        inputModes[j].className = 'input-mode';
       }
       document.getElementById(mode + 'Mode').className = 'input-mode active';
 
-      // Clear error
+      // Clear messages
       hideError();
+      hideSuccess();
     });
   }
 
@@ -180,12 +231,13 @@ function initHomePage() {
   // Start button
   addEvent(startButton, 'click', function () {
     hideError();
+    hideSuccess();
     if (currentMode === 'paste') {
       handlePasteMode();
     } else if (currentMode === 'upload') {
       handleUploadMode();
-    } else if (currentMode === 'url') {
-      handleUrlMode();
+    } else if (currentMode === 'code') {
+      handleCodeMode();
     }
   });
   function handlePasteMode() {
@@ -200,14 +252,8 @@ function initHomePage() {
       return;
     }
 
-    // Store data and navigate to reader
-    var chapters = [{
-      title: 'Untitled',
-      text: text,
-      word_count: words.length
-    }];
-    storeReadingData(chapters);
-    window.location.href = 'reader.html';
+    // Upload to backend to get a code
+    uploadTextToBackend(text);
   }
   function handleUploadMode() {
     if (!selectedFile) {
@@ -215,107 +261,174 @@ function initHomePage() {
       return;
     }
     var fileName = selectedFile.name.toLowerCase();
-    if (fileName.endsWith('.txt')) {
-      // Read .txt file in browser
-      var reader = new FileReader();
-      reader.onload = function (e) {
-        var text = e.target.result;
-        var words = tokenizeText(text);
-        if (words.length === 0) {
-          showError('No readable text found in file.');
-          return;
-        }
-        var chapters = [{
-          title: selectedFile.name.replace('.txt', ''),
-          text: text,
-          word_count: words.length
-        }];
-        storeReadingData(chapters);
-        window.location.href = 'reader.html';
-      };
-      reader.onerror = function () {
-        showError('Failed to read file. Please try again.');
-      };
-      reader.readAsText(selectedFile);
-    } else if (fileName.endsWith('.epub')) {
-      // Upload to backend for parsing
-      uploadToBackend(selectedFile);
-    } else {
-      showError('Unsupported file format. Please use .txt or .epub files.');
+    var supportedExtensions = ['.txt', '.epub', '.mobi', '.azw', '.azw3', '.prc'];
+    var isSupported = false;
+    for (var i = 0; i < supportedExtensions.length; i++) {
+      if (fileName.indexOf(supportedExtensions[i], fileName.length - supportedExtensions[i].length) !== -1) {
+        isSupported = true;
+        break;
+      }
     }
-  }
-  function handleUrlMode() {
-    var url = document.getElementById('urlInput').value.trim();
-    if (!url) {
-      showError('Please enter a URL.');
+    if (!isSupported) {
+      showError('Unsupported file format. Please use .txt, .epub, or .mobi files.');
       return;
     }
-    if (!url.match(/^https?:\/\//)) {
-      showError('Please enter a valid URL starting with http:// or https://');
+    uploadFileToBackend(selectedFile);
+  }
+  function handleCodeMode() {
+    var input = document.getElementById('codeInput').value.trim();
+    if (!input) {
+      showError('Please enter a code or link.');
       return;
     }
-    fetchFromBackend(url);
+    var code = extractCodeFromInput(input);
+    if (!code) {
+      showError('No valid code found. Please enter a 6-digit numeric code.');
+      return;
+    }
+    fetchBookByCode(code);
   }
-  function uploadToBackend(file) {
+  function uploadFileToBackend(file) {
     showLoading();
     var formData = new FormData();
     formData.append('file', file);
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'http://localhost:8000/api/process', true);
+    xhr.open('POST', API_BASE_URL + '/api/upload', true);
     xhr.onload = function () {
       hideLoading();
       if (xhr.status === 200) {
         try {
           var response = JSON.parse(xhr.responseText);
-          if (response.success && response.chapters) {
-            storeReadingData(response.chapters);
-            window.location.href = 'reader.html';
+          if (response.code && response.book) {
+            showSuccessMessage(response.code, response.link);
+            storeReadingData(convertBookToChapters(response.book));
+
+            // Auto-navigate after 3 seconds
+            setTimeout(function () {
+              window.location.href = 'reader.html';
+            }, 3000);
+          } else if (response.error) {
+            showError(response.error + (response.details ? ': ' + response.details : ''));
           } else {
-            showError(response.message || 'Failed to process file.');
+            showError('Failed to process file.');
           }
         } catch (e) {
           showError('Invalid response from server.');
         }
+      } else if (xhr.status === 413) {
+        showError('File too large. Maximum size is 50MB.');
+      } else if (xhr.status === 429) {
+        showError('Too many requests. Please wait a moment.');
       } else {
-        showError('Server error. Please ensure the backend is running.');
+        try {
+          var errResponse = JSON.parse(xhr.responseText);
+          showError(errResponse.error || 'Server error.');
+        } catch (e) {
+          showError('Server error. Please try again.');
+        }
       }
     };
     xhr.onerror = function () {
       hideLoading();
-      showError('Cannot connect to backend. Please ensure it is running.');
+      showError('Cannot connect to server. Please ensure it is running.');
     };
     xhr.send(formData);
   }
-  function fetchFromBackend(url) {
+  function uploadTextToBackend(text) {
     showLoading();
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'http://localhost:8000/api/process', true);
+    xhr.open('POST', API_BASE_URL + '/api/text', true);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onload = function () {
       hideLoading();
       if (xhr.status === 200) {
         try {
           var response = JSON.parse(xhr.responseText);
-          if (response.success && response.chapters) {
-            storeReadingData(response.chapters);
-            window.location.href = 'reader.html';
+          if (response.code && response.book) {
+            showSuccessMessage(response.code, response.link);
+            storeReadingData(convertBookToChapters(response.book));
+
+            // Auto-navigate after 3 seconds
+            setTimeout(function () {
+              window.location.href = 'reader.html';
+            }, 3000);
+          } else if (response.error) {
+            showError(response.error);
           } else {
-            showError(response.message || 'Failed to fetch URL.');
+            showError('Failed to process text.');
           }
         } catch (e) {
           showError('Invalid response from server.');
         }
+      } else if (xhr.status === 429) {
+        showError('Too many requests. Please wait a moment.');
       } else {
-        showError('Server error. Please ensure the backend is running.');
+        showError('Server error. Please try again.');
       }
     };
     xhr.onerror = function () {
       hideLoading();
-      showError('Cannot connect to backend. Please ensure it is running.');
+      showError('Cannot connect to server. Please ensure it is running.');
     };
     xhr.send(JSON.stringify({
-      url: url
+      text: text
     }));
+  }
+  function fetchBookByCode(code) {
+    showLoading();
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', API_BASE_URL + '/api/book/' + code, true);
+    xhr.onload = function () {
+      hideLoading();
+      if (xhr.status === 200) {
+        try {
+          var response = JSON.parse(xhr.responseText);
+          if (response.book) {
+            storeReadingData(convertBookToChapters(response.book));
+            window.location.href = 'reader.html';
+          } else {
+            showError('Book not found.');
+          }
+        } catch (e) {
+          showError('Invalid response from server.');
+        }
+      } else if (xhr.status === 404) {
+        showError('Book not found. Please check the code and try again.');
+      } else if (xhr.status === 429) {
+        showError('Too many requests. Please wait a moment.');
+      } else {
+        showError('Server error. Please try again.');
+      }
+    };
+    xhr.onerror = function () {
+      hideLoading();
+      showError('Cannot connect to server. Please ensure it is running.');
+    };
+    xhr.send();
+  }
+  function convertBookToChapters(book) {
+    // Convert from API format to reader format
+    var chapters = [];
+    if (book && book.chapters) {
+      for (var i = 0; i < book.chapters.length; i++) {
+        var ch = book.chapters[i];
+        chapters.push({
+          title: ch.title || 'Chapter ' + (i + 1),
+          text: ch.content || '',
+          word_count: ch.word_count || 0
+        });
+      }
+    }
+    return chapters;
+  }
+  function showSuccessMessage(code, link) {
+    bookCode.textContent = code;
+    bookLink.textContent = link;
+    bookLink.href = link;
+    successMessage.className = 'success-message visible';
+  }
+  function hideSuccess() {
+    successMessage.className = 'success-message';
   }
   function showError(message) {
     errorMessage.textContent = message;
@@ -508,7 +621,7 @@ function initReaderPage() {
     state.isPlaying = true;
     state.startTime = Date.now();
     readerContainer.className = 'reader-container reader playing';
-    playPauseButton.innerHTML = '❚❚ Pause';
+    playPauseButton.innerHTML = '&#10074;&#10074; Pause';
     displayNextWord();
   }
   function pause() {
@@ -522,7 +635,7 @@ function initReaderPage() {
       state.startTime = null;
     }
     readerContainer.className = 'reader-container reader paused';
-    playPauseButton.innerHTML = '▶ Play';
+    playPauseButton.innerHTML = '&#9654; Play';
     updateChapterInfo();
   }
   function togglePlayPause() {

@@ -15,7 +15,7 @@
       <div class="mode-tabs">
         <button class="mode-tab active" data-mode="paste">Paste Text</button>
         <button class="mode-tab" data-mode="upload">Upload File</button>
-        <button class="mode-tab" data-mode="url">Enter URL</button>
+        <button class="mode-tab" data-mode="code">Enter Code</button>
       </div>
 
       <!-- Input area -->
@@ -29,17 +29,27 @@
         <div id="uploadMode" class="input-mode">
           <div class="file-upload-area">
             <div class="file-input-wrapper">
-              <input type="file" id="fileInput" accept=".txt,.epub">
+              <input type="file" id="fileInput" accept=".txt,.epub,.mobi,.azw,.azw3,.prc">
               <label for="fileInput" class="file-button">Choose File</label>
             </div>
             <div class="file-info" id="fileInfo">No file selected</div>
           </div>
         </div>
 
-        <!-- URL input mode -->
-        <div id="urlMode" class="input-mode">
-          <input type="text" id="urlInput" placeholder="https://example.com/book.epub">
+        <!-- Code input mode -->
+        <div id="codeMode" class="input-mode">
+          <input type="text" id="codeInput" placeholder="Enter 6-digit code or paste link">
+          <p class="code-hint">Enter a book code to open it on this device</p>
         </div>
+      </div>
+
+      <!-- Success message (shown after upload) -->
+      <div class="success-message" id="successMessage">
+        <div class="success-icon">&#10003;</div>
+        <div class="success-text">Book saved!</div>
+        <div class="success-code">Code: <span id="bookCode"></span></div>
+        <div class="success-link">Link: <a id="bookLink" href="#" target="_blank"></a></div>
+        <p class="success-hint">You can open this book on any device using the code or link above.</p>
       </div>
 
       <!-- Error message -->

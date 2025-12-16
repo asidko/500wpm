@@ -4,6 +4,16 @@
  */
 
 // ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+var API_BASE_URL = (function() {
+  // Use current origin for API calls
+  var loc = window.location;
+  return loc.protocol + '//' + loc.host;
+})();
+
+// ============================================================================
 // TOKENIZATION & TEXT PROCESSING
 // ============================================================================
 
@@ -19,51 +29,51 @@ function tokenizeText(text) {
   text = text.trim().replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
   // Advanced patterns to preserve as single words
-  const urlPattern = /https?:\/\/[^\s]+/g;
-  const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  const phonePattern = /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
-  const numberPattern = /[$€£¥]?\d{1,3}(,\d{3})*(\.\d+)?[%€£¥]?/g;
+  var urlPattern = /https?:\/\/[^\s]+/g;
+  var emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  var phonePattern = /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
+  var numberPattern = /[$€£¥]?\d{1,3}(,\d{3})*(\.\d+)?[%€£¥]?/g;
 
   // Replace special patterns with placeholders
-  const placeholders = [];
-  let placeholderIndex = 0;
+  var placeholders = [];
+  var placeholderIndex = 0;
 
-  text = text.replace(urlPattern, (match) => {
-    const placeholder = `__URL_${placeholderIndex}__`;
-    placeholders.push({ placeholder, original: match });
+  text = text.replace(urlPattern, function(match) {
+    var placeholder = '__URL_' + placeholderIndex + '__';
+    placeholders.push({ placeholder: placeholder, original: match });
     placeholderIndex++;
     return placeholder;
   });
 
-  text = text.replace(emailPattern, (match) => {
-    const placeholder = `__EMAIL_${placeholderIndex}__`;
-    placeholders.push({ placeholder, original: match });
+  text = text.replace(emailPattern, function(match) {
+    var placeholder = '__EMAIL_' + placeholderIndex + '__';
+    placeholders.push({ placeholder: placeholder, original: match });
     placeholderIndex++;
     return placeholder;
   });
 
-  text = text.replace(phonePattern, (match) => {
-    const placeholder = `__PHONE_${placeholderIndex}__`;
-    placeholders.push({ placeholder, original: match });
+  text = text.replace(phonePattern, function(match) {
+    var placeholder = '__PHONE_' + placeholderIndex + '__';
+    placeholders.push({ placeholder: placeholder, original: match });
     placeholderIndex++;
     return placeholder;
   });
 
-  text = text.replace(numberPattern, (match) => {
-    const placeholder = `__NUMBER_${placeholderIndex}__`;
-    placeholders.push({ placeholder, original: match });
+  text = text.replace(numberPattern, function(match) {
+    var placeholder = '__NUMBER_' + placeholderIndex + '__';
+    placeholders.push({ placeholder: placeholder, original: match });
     placeholderIndex++;
     return placeholder;
   });
 
   // Split on whitespace and em-dashes
-  let words = text.split(/\s+|—/);
+  var words = text.split(/\s+|—/);
 
   // Filter empty strings and restore placeholders
-  words = words.filter((word) => word.length > 0);
+  words = words.filter(function(word) { return word.length > 0; });
 
-  words = words.map((word) => {
-    for (let i = 0; i < placeholders.length; i++) {
+  words = words.map(function(word) {
+    for (var i = 0; i < placeholders.length; i++) {
       if (word.indexOf(placeholders[i].placeholder) !== -1) {
         return word.replace(placeholders[i].placeholder, placeholders[i].original);
       }
@@ -112,10 +122,44 @@ function getIntervalMs(wpm) {
 // ============================================================================
 
 function formatTime(ms) {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
+  var seconds = Math.floor(ms / 1000);
+  var minutes = Math.floor(seconds / 60);
+  var secs = seconds % 60;
   return minutes + 'm ' + secs + 's';
+}
+
+// ============================================================================
+// CODE EXTRACTION
+// ============================================================================
+
+/**
+ * Extract the last continuous sequence of digits (6+) from any input
+ * Handles: "847291", "https://site.com/847291", "code is 847291", etc.
+ */
+function extractCodeFromInput(input) {
+  if (!input) return '';
+
+  var lastSequence = '';
+  var currentSequence = '';
+
+  for (var i = 0; i < input.length; i++) {
+    var c = input.charAt(i);
+    if (c >= '0' && c <= '9') {
+      currentSequence += c;
+    } else {
+      if (currentSequence.length >= 6) {
+        lastSequence = currentSequence;
+      }
+      currentSequence = '';
+    }
+  }
+
+  // Check final sequence
+  if (currentSequence.length >= 6) {
+    lastSequence = currentSequence;
+  }
+
+  return lastSequence;
 }
 
 // ============================================================================
@@ -123,37 +167,48 @@ function formatTime(ms) {
 // ============================================================================
 
 function initHomePage() {
-  const modeTabs = document.querySelectorAll('.mode-tab');
-  const inputModes = document.querySelectorAll('.input-mode');
-  const startButton = document.getElementById('startButton');
-  const fileInput = document.getElementById('fileInput');
-  const fileInfo = document.getElementById('fileInfo');
-  const errorMessage = document.getElementById('errorMessage');
-  const loading = document.getElementById('loading');
+  // Check if we're on a direct code route (e.g., /847291)
+  var pathCode = extractCodeFromInput(window.location.pathname);
+  if (pathCode) {
+    fetchBookByCode(pathCode);
+    return;
+  }
 
-  let currentMode = 'paste';
-  let selectedFile = null;
+  var modeTabs = document.querySelectorAll('.mode-tab');
+  var inputModes = document.querySelectorAll('.input-mode');
+  var startButton = document.getElementById('startButton');
+  var fileInput = document.getElementById('fileInput');
+  var fileInfo = document.getElementById('fileInfo');
+  var errorMessage = document.getElementById('errorMessage');
+  var loading = document.getElementById('loading');
+  var successMessage = document.getElementById('successMessage');
+  var bookCode = document.getElementById('bookCode');
+  var bookLink = document.getElementById('bookLink');
+
+  var currentMode = 'paste';
+  var selectedFile = null;
 
   // Mode tab switching
-  for (let i = 0; i < modeTabs.length; i++) {
+  for (var i = 0; i < modeTabs.length; i++) {
     addEvent(modeTabs[i], 'click', function() {
-      const mode = this.getAttribute('data-mode');
+      var mode = this.getAttribute('data-mode');
       currentMode = mode;
 
       // Update tab styles
-      for (let j = 0; j < modeTabs.length; j++) {
+      for (var j = 0; j < modeTabs.length; j++) {
         modeTabs[j].className = 'mode-tab';
       }
       this.className = 'mode-tab active';
 
       // Update input areas
-      for (let j = 0; j < inputModes.length; j++) {
+      for (var j = 0; j < inputModes.length; j++) {
         inputModes[j].className = 'input-mode';
       }
       document.getElementById(mode + 'Mode').className = 'input-mode active';
 
-      // Clear error
+      // Clear messages
       hideError();
+      hideSuccess();
     });
   }
 
@@ -161,8 +216,8 @@ function initHomePage() {
   addEvent(fileInput, 'change', function() {
     if (this.files && this.files.length > 0) {
       selectedFile = this.files[0];
-      const fileName = selectedFile.name;
-      const fileSize = (selectedFile.size / 1024).toFixed(2);
+      var fileName = selectedFile.name;
+      var fileSize = (selectedFile.size / 1024).toFixed(2);
       fileInfo.textContent = fileName + ' (' + fileSize + ' KB)';
     } else {
       selectedFile = null;
@@ -173,37 +228,32 @@ function initHomePage() {
   // Start button
   addEvent(startButton, 'click', function() {
     hideError();
+    hideSuccess();
 
     if (currentMode === 'paste') {
       handlePasteMode();
     } else if (currentMode === 'upload') {
       handleUploadMode();
-    } else if (currentMode === 'url') {
-      handleUrlMode();
+    } else if (currentMode === 'code') {
+      handleCodeMode();
     }
   });
 
   function handlePasteMode() {
-    const text = document.getElementById('pasteText').value;
+    var text = document.getElementById('pasteText').value;
     if (!text || !text.trim()) {
       showError('Please paste some text to read.');
       return;
     }
 
-    const words = tokenizeText(text);
+    var words = tokenizeText(text);
     if (words.length === 0) {
       showError('No readable text found.');
       return;
     }
 
-    // Store data and navigate to reader
-    const chapters = [{
-      title: 'Untitled',
-      text: text,
-      word_count: words.length
-    }];
-    storeReadingData(chapters);
-    window.location.href = 'reader.html';
+    // Upload to backend to get a code
+    uploadTextToBackend(text);
   }
 
   function handleUploadMode() {
@@ -212,99 +262,99 @@ function initHomePage() {
       return;
     }
 
-    const fileName = selectedFile.name.toLowerCase();
+    var fileName = selectedFile.name.toLowerCase();
+    var supportedExtensions = ['.txt', '.epub', '.mobi', '.azw', '.azw3', '.prc'];
+    var isSupported = false;
 
-    if (fileName.endsWith('.txt')) {
-      // Read .txt file in browser
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const text = e.target.result;
-        const words = tokenizeText(text);
-
-        if (words.length === 0) {
-          showError('No readable text found in file.');
-          return;
-        }
-
-        const chapters = [{
-          title: selectedFile.name.replace('.txt', ''),
-          text: text,
-          word_count: words.length
-        }];
-        storeReadingData(chapters);
-        window.location.href = 'reader.html';
-      };
-      reader.onerror = function() {
-        showError('Failed to read file. Please try again.');
-      };
-      reader.readAsText(selectedFile);
-
-    } else if (fileName.endsWith('.epub')) {
-      // Upload to backend for parsing
-      uploadToBackend(selectedFile);
-
-    } else {
-      showError('Unsupported file format. Please use .txt or .epub files.');
+    for (var i = 0; i < supportedExtensions.length; i++) {
+      if (fileName.indexOf(supportedExtensions[i], fileName.length - supportedExtensions[i].length) !== -1) {
+        isSupported = true;
+        break;
+      }
     }
-  }
 
-  function handleUrlMode() {
-    const url = document.getElementById('urlInput').value.trim();
-    if (!url) {
-      showError('Please enter a URL.');
+    if (!isSupported) {
+      showError('Unsupported file format. Please use .txt, .epub, or .mobi files.');
       return;
     }
 
-    if (!url.match(/^https?:\/\//)) {
-      showError('Please enter a valid URL starting with http:// or https://');
+    uploadFileToBackend(selectedFile);
+  }
+
+  function handleCodeMode() {
+    var input = document.getElementById('codeInput').value.trim();
+    if (!input) {
+      showError('Please enter a code or link.');
       return;
     }
 
-    fetchFromBackend(url);
+    var code = extractCodeFromInput(input);
+    if (!code) {
+      showError('No valid code found. Please enter a 6-digit numeric code.');
+      return;
+    }
+
+    fetchBookByCode(code);
   }
 
-  function uploadToBackend(file) {
+  function uploadFileToBackend(file) {
     showLoading();
 
-    const formData = new FormData();
+    var formData = new FormData();
     formData.append('file', file);
 
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', 'http://localhost:8000/api/process', true);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', API_BASE_URL + '/api/upload', true);
 
     xhr.onload = function() {
       hideLoading();
 
       if (xhr.status === 200) {
         try {
-          const response = JSON.parse(xhr.responseText);
-          if (response.success && response.chapters) {
-            storeReadingData(response.chapters);
-            window.location.href = 'reader.html';
+          var response = JSON.parse(xhr.responseText);
+          if (response.code && response.book) {
+            showSuccessMessage(response.code, response.link);
+            storeReadingData(convertBookToChapters(response.book));
+
+            // Auto-navigate after 3 seconds
+            setTimeout(function() {
+              window.location.href = 'reader.html';
+            }, 3000);
+          } else if (response.error) {
+            showError(response.error + (response.details ? ': ' + response.details : ''));
           } else {
-            showError(response.message || 'Failed to process file.');
+            showError('Failed to process file.');
           }
         } catch (e) {
           showError('Invalid response from server.');
         }
+      } else if (xhr.status === 413) {
+        showError('File too large. Maximum size is 50MB.');
+      } else if (xhr.status === 429) {
+        showError('Too many requests. Please wait a moment.');
       } else {
-        showError('Server error. Please ensure the backend is running.');
+        try {
+          var errResponse = JSON.parse(xhr.responseText);
+          showError(errResponse.error || 'Server error.');
+        } catch (e) {
+          showError('Server error. Please try again.');
+        }
       }
     };
 
     xhr.onerror = function() {
       hideLoading();
-      showError('Cannot connect to backend. Please ensure it is running.');
+      showError('Cannot connect to server. Please ensure it is running.');
     };
 
     xhr.send(formData);
   }
 
-  function fetchFromBackend(url) {
+  function uploadTextToBackend(text) {
     showLoading();
 
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', 'http://localhost:8000/api/process', true);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', API_BASE_URL + '/api/text', true);
     xhr.setRequestHeader('Content-Type', 'application/json');
 
     xhr.onload = function() {
@@ -312,27 +362,101 @@ function initHomePage() {
 
       if (xhr.status === 200) {
         try {
-          const response = JSON.parse(xhr.responseText);
-          if (response.success && response.chapters) {
-            storeReadingData(response.chapters);
-            window.location.href = 'reader.html';
+          var response = JSON.parse(xhr.responseText);
+          if (response.code && response.book) {
+            showSuccessMessage(response.code, response.link);
+            storeReadingData(convertBookToChapters(response.book));
+
+            // Auto-navigate after 3 seconds
+            setTimeout(function() {
+              window.location.href = 'reader.html';
+            }, 3000);
+          } else if (response.error) {
+            showError(response.error);
           } else {
-            showError(response.message || 'Failed to fetch URL.');
+            showError('Failed to process text.');
           }
         } catch (e) {
           showError('Invalid response from server.');
         }
+      } else if (xhr.status === 429) {
+        showError('Too many requests. Please wait a moment.');
       } else {
-        showError('Server error. Please ensure the backend is running.');
+        showError('Server error. Please try again.');
       }
     };
 
     xhr.onerror = function() {
       hideLoading();
-      showError('Cannot connect to backend. Please ensure it is running.');
+      showError('Cannot connect to server. Please ensure it is running.');
     };
 
-    xhr.send(JSON.stringify({ url: url }));
+    xhr.send(JSON.stringify({ text: text }));
+  }
+
+  function fetchBookByCode(code) {
+    showLoading();
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', API_BASE_URL + '/api/book/' + code, true);
+
+    xhr.onload = function() {
+      hideLoading();
+
+      if (xhr.status === 200) {
+        try {
+          var response = JSON.parse(xhr.responseText);
+          if (response.book) {
+            storeReadingData(convertBookToChapters(response.book));
+            window.location.href = 'reader.html';
+          } else {
+            showError('Book not found.');
+          }
+        } catch (e) {
+          showError('Invalid response from server.');
+        }
+      } else if (xhr.status === 404) {
+        showError('Book not found. Please check the code and try again.');
+      } else if (xhr.status === 429) {
+        showError('Too many requests. Please wait a moment.');
+      } else {
+        showError('Server error. Please try again.');
+      }
+    };
+
+    xhr.onerror = function() {
+      hideLoading();
+      showError('Cannot connect to server. Please ensure it is running.');
+    };
+
+    xhr.send();
+  }
+
+  function convertBookToChapters(book) {
+    // Convert from API format to reader format
+    var chapters = [];
+    if (book && book.chapters) {
+      for (var i = 0; i < book.chapters.length; i++) {
+        var ch = book.chapters[i];
+        chapters.push({
+          title: ch.title || ('Chapter ' + (i + 1)),
+          text: ch.content || '',
+          word_count: ch.word_count || 0
+        });
+      }
+    }
+    return chapters;
+  }
+
+  function showSuccessMessage(code, link) {
+    bookCode.textContent = code;
+    bookLink.textContent = link;
+    bookLink.href = link;
+    successMessage.className = 'success-message visible';
+  }
+
+  function hideSuccess() {
+    successMessage.className = 'success-message';
   }
 
   function showError(message) {
@@ -370,9 +494,9 @@ function initHomePage() {
 
 function initReaderPage() {
   // Load reading data
-  let chapters = null;
+  var chapters = null;
   try {
-    const stored = localStorage.getItem('readingData');
+    var stored = localStorage.getItem('readingData');
     if (stored) {
       chapters = JSON.parse(stored);
     }
@@ -387,7 +511,7 @@ function initReaderPage() {
   }
 
   // Reader state
-  const state = {
+  var state = {
     chapters: chapters,
     currentChapterIndex: 0,
     allWords: [],
@@ -403,31 +527,31 @@ function initReaderPage() {
   prepareWords();
 
   // DOM elements
-  const readerContainer = document.getElementById('readerContainer');
-  const wordDisplay = document.getElementById('wordDisplay');
-  const speedDisplay = document.getElementById('speedDisplay');
-  const progressDisplay = document.getElementById('progressDisplay');
-  const chapterInfo = document.getElementById('chapterInfo');
-  const chapterList = document.getElementById('chapterList');
-  const chapterItems = document.getElementById('chapterItems');
-  const playPauseButton = document.getElementById('playPauseButton');
-  const increaseSpeed = document.getElementById('increaseSpeed');
-  const decreaseSpeed = document.getElementById('decreaseSpeed');
-  const restartButton = document.getElementById('restartButton');
-  const backButton = document.getElementById('backButton');
-  const forwardButton = document.getElementById('forwardButton');
-  const closeButton = document.getElementById('closeButton');
-  const chapterCompleteScreen = document.getElementById('chapterCompleteScreen');
-  const readingCompleteScreen = document.getElementById('readingCompleteScreen');
-  const nextChapterButton = document.getElementById('nextChapterButton');
-  const chaptersButton = document.getElementById('chaptersButton');
-  const homeFromChapter = document.getElementById('homeFromChapter');
-  const restartFromComplete = document.getElementById('restartFromComplete');
-  const homeFromComplete = document.getElementById('homeFromComplete');
-  const chapterCompleteTitle = document.getElementById('chapterCompleteTitle');
-  const completionMessage = document.getElementById('completionMessage');
-  const totalWordsInline = document.getElementById('totalWordsInline');
-  const timeTakenInline = document.getElementById('timeTakenInline');
+  var readerContainer = document.getElementById('readerContainer');
+  var wordDisplay = document.getElementById('wordDisplay');
+  var speedDisplay = document.getElementById('speedDisplay');
+  var progressDisplay = document.getElementById('progressDisplay');
+  var chapterInfo = document.getElementById('chapterInfo');
+  var chapterList = document.getElementById('chapterList');
+  var chapterItems = document.getElementById('chapterItems');
+  var playPauseButton = document.getElementById('playPauseButton');
+  var increaseSpeed = document.getElementById('increaseSpeed');
+  var decreaseSpeed = document.getElementById('decreaseSpeed');
+  var restartButton = document.getElementById('restartButton');
+  var backButton = document.getElementById('backButton');
+  var forwardButton = document.getElementById('forwardButton');
+  var closeButton = document.getElementById('closeButton');
+  var chapterCompleteScreen = document.getElementById('chapterCompleteScreen');
+  var readingCompleteScreen = document.getElementById('readingCompleteScreen');
+  var nextChapterButton = document.getElementById('nextChapterButton');
+  var chaptersButton = document.getElementById('chaptersButton');
+  var homeFromChapter = document.getElementById('homeFromChapter');
+  var restartFromComplete = document.getElementById('restartFromComplete');
+  var homeFromComplete = document.getElementById('homeFromComplete');
+  var chapterCompleteTitle = document.getElementById('chapterCompleteTitle');
+  var completionMessage = document.getElementById('completionMessage');
+  var totalWordsInline = document.getElementById('totalWordsInline');
+  var timeTakenInline = document.getElementById('timeTakenInline');
 
   // Initialize UI
   updateSpeedDisplay();
@@ -460,7 +584,7 @@ function initReaderPage() {
 
   // Keyboard shortcuts
   addEvent(document, 'keydown', function(e) {
-    const key = e.keyCode || e.which;
+    var key = e.keyCode || e.which;
 
     // Spacebar: play/pause
     if (key === 32) {
@@ -502,10 +626,10 @@ function initReaderPage() {
   // Core functions
   function prepareWords() {
     state.allWords = [];
-    for (let i = 0; i < state.chapters.length; i++) {
-      const chapter = state.chapters[i];
-      const words = tokenizeText(chapter.text);
-      for (let j = 0; j < words.length; j++) {
+    for (var i = 0; i < state.chapters.length; i++) {
+      var chapter = state.chapters[i];
+      var words = tokenizeText(chapter.text);
+      for (var j = 0; j < words.length; j++) {
         state.allWords.push({
           word: words[j],
           chapterIndex: i,
@@ -525,7 +649,7 @@ function initReaderPage() {
     state.isPlaying = true;
     state.startTime = Date.now();
     readerContainer.className = 'reader-container reader playing';
-    playPauseButton.innerHTML = '❚❚ Pause';
+    playPauseButton.innerHTML = '&#10074;&#10074; Pause';
 
     displayNextWord();
   }
@@ -541,7 +665,7 @@ function initReaderPage() {
       state.startTime = null;
     }
     readerContainer.className = 'reader-container reader paused';
-    playPauseButton.innerHTML = '▶ Play';
+    playPauseButton.innerHTML = '&#9654; Play';
     updateChapterInfo();
   }
 
@@ -558,7 +682,7 @@ function initReaderPage() {
       return;
     }
 
-    const wordData = state.allWords[state.currentWordIndex];
+    var wordData = state.allWords[state.currentWordIndex];
     wordDisplay.textContent = wordData.word;
 
     // Check if chapter changed
@@ -582,8 +706,8 @@ function initReaderPage() {
     state.currentWordIndex++;
 
     // Calculate speed and interval
-    const currentSpeed = getCurrentSpeed(state.currentWordIndex - 1, state.targetSpeed);
-    const interval = getIntervalMs(currentSpeed);
+    var currentSpeed = getCurrentSpeed(state.currentWordIndex - 1, state.targetSpeed);
+    var interval = getIntervalMs(currentSpeed);
 
     // Schedule next word
     state.timer = setTimeout(displayNextWord, interval);
@@ -605,15 +729,15 @@ function initReaderPage() {
   }
 
   function updateProgressDisplay() {
-    const current = state.currentWordIndex + 1;
-    const total = state.allWords.length;
-    const percentage = Math.round((current / total) * 100);
+    var current = state.currentWordIndex + 1;
+    var total = state.allWords.length;
+    var percentage = Math.round((current / total) * 100);
     progressDisplay.textContent = percentage + '%';
   }
 
   function updateChapterInfo() {
     if (state.chapters.length > 1) {
-      const chapter = state.chapters[state.currentChapterIndex];
+      var chapter = state.chapters[state.currentChapterIndex];
       chapterInfo.textContent = chapter.title;
       chapterInfo.className = 'chapter-info visible';
     }
@@ -625,9 +749,9 @@ function initReaderPage() {
     }
 
     chapterItems.innerHTML = '';
-    for (let i = 0; i < state.chapters.length; i++) {
-      const chapter = state.chapters[i];
-      const item = document.createElement('div');
+    for (var i = 0; i < state.chapters.length; i++) {
+      var chapter = state.chapters[i];
+      var item = document.createElement('div');
       item.className = 'chapter-item';
       if (i === state.currentChapterIndex) {
         item.className = 'chapter-item current';
@@ -636,7 +760,7 @@ function initReaderPage() {
       item.setAttribute('data-index', i);
 
       addEvent(item, 'click', function() {
-        const index = parseInt(this.getAttribute('data-index'));
+        var index = parseInt(this.getAttribute('data-index'));
         jumpToChapter(index);
       });
 
@@ -659,7 +783,7 @@ function initReaderPage() {
     hideChapterList();
 
     // Find first word of chapter
-    for (let i = 0; i < state.allWords.length; i++) {
+    for (var i = 0; i < state.allWords.length; i++) {
       if (state.allWords[i].chapterIndex === chapterIndex) {
         state.currentWordIndex = i;
         state.currentChapterIndex = chapterIndex;
@@ -674,7 +798,7 @@ function initReaderPage() {
   }
 
   function skipWords(count) {
-    const wasPlaying = state.isPlaying;
+    var wasPlaying = state.isPlaying;
     if (wasPlaying) {
       pause();
     }
@@ -723,7 +847,7 @@ function initReaderPage() {
   }
 
   function showChapterComplete() {
-    const chapter = state.chapters[state.currentChapterIndex];
+    var chapter = state.chapters[state.currentChapterIndex];
     chapterCompleteTitle.textContent = '✓ ' + chapter.title + ' - Complete!';
     chapterCompleteScreen.className = 'completion-screen visible';
   }
@@ -742,8 +866,8 @@ function initReaderPage() {
   function showReadingComplete() {
     pause();
 
-    const totalWords = state.allWords.length;
-    const timeTaken = state.totalElapsedTime + (state.startTime ? Date.now() - state.startTime : 0);
+    var totalWords = state.allWords.length;
+    var timeTaken = state.totalElapsedTime + (state.startTime ? Date.now() - state.startTime : 0);
 
     // Update inline completion message
     totalWordsInline.textContent = totalWords.toLocaleString();
