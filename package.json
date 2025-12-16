@@ -11,9 +11,14 @@
   "devDependencies": {
     "@babel/cli": "^7.23.0",
     "@babel/core": "^7.23.0",
-    "@babel/preset-env": "^7.23.0"
+    "@babel/preset-env": "^7.23.0",
+    "playwright": "^1.57.0"
   },
-  "keywords": ["speed-reading", "rsvp", "ebook-reader"],
+  "keywords": [
+    "speed-reading",
+    "rsvp",
+    "ebook-reader"
+  ],
   "author": "",
   "license": "MIT"
 }

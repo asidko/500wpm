@@ -135,18 +135,86 @@ html, body {
   color: #666;
 }
 
-/* URL input mode */
-#urlInput {
+/* Code input mode */
+#codeInput {
   width: 100%;
   padding: 15px;
-  font-size: 1em;
+  font-size: 1.2em;
   font-family: inherit;
   border: 2px solid #ddd;
+  text-align: center;
+  letter-spacing: 0.2em;
 }
 
-#urlInput:focus {
+#codeInput:focus {
   outline: none;
   border-color: #000;
+}
+
+.code-hint {
+  margin-top: 15px;
+  font-size: 0.9em;
+  color: #666;
+}
+
+/* Success message */
+.success-message {
+  display: none;
+  max-width: 600px;
+  margin: 20px auto;
+  padding: 25px;
+  background: #e6ffe6;
+  border: 2px solid #44aa44;
+  text-align: center;
+}
+
+.success-message.visible {
+  display: block;
+}
+
+.success-icon {
+  font-size: 3em;
+  color: #44aa44;
+  margin-bottom: 10px;
+}
+
+.success-text {
+  font-size: 1.4em;
+  font-weight: 600;
+  color: #228822;
+  margin-bottom: 15px;
+}
+
+.success-code {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: #000;
+  margin-bottom: 10px;
+  letter-spacing: 0.15em;
+}
+
+.success-code span {
+  background: #fff;
+  padding: 5px 15px;
+  border: 2px solid #228822;
+}
+
+.success-link {
+  font-size: 1em;
+  color: #444;
+  margin-bottom: 15px;
+  word-break: break-all;
+}
+
+.success-link a {
+  color: #0066cc;
+  text-decoration: underline;
+}
+
+.success-hint {
+  font-size: 0.9em;
+  color: #666;
+  margin-top: 15px;
 }
 
 /* Start button */
