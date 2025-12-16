@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/500wpm/backend/db/sqlc"
@@ -20,7 +19,6 @@ const (
 	DefaultCodeLength = 6
 	MaxCodeLength     = 10
 	MaxFileSize       = 50 * 1024 * 1024 // 50MB
-	CleanupInterval   = 1 * time.Hour
 )
 
 // Common errors
@@ -30,28 +28,37 @@ var (
 	ErrInvalidCode  = errors.New("invalid code format")
 )
 
+// ProcessResult contains the result of processing a file or text
+type ProcessResult struct {
+	Code string
+	Book *models.BookContent
+}
+
 // BookService handles book-related business logic
 type BookService struct {
 	queries   *sqlc.Queries
 	db        *sql.DB
 	converter *converter.Manager
 	codeGen   *CodeGenerator
-	baseURL   string
+	cleaner   *Cleaner
 }
 
 // NewBookService creates a new book service
-func NewBookService(db *sql.DB, baseURL string) *BookService {
-	return &BookService{
+// ttlDays: number of days after which books expire (0 = disabled, forever)
+func NewBookService(db *sql.DB, ttlDays int) *BookService {
+	svc := &BookService{
 		queries:   sqlc.New(db),
 		db:        db,
 		converter: converter.NewManager(),
 		codeGen:   NewCodeGenerator(DefaultCodeLength, MaxCodeLength),
-		baseURL:   baseURL,
 	}
+	// Cleaner uses BookService itself as the repository (implements CleanupRepository)
+	svc.cleaner = NewCleaner(svc, ttlDays)
+	return svc
 }
 
 // ProcessFile processes an uploaded file and returns a unique code
-func (s *BookService) ProcessFile(ctx context.Context, content []byte, filename string) (*models.UploadResponse, error) {
+func (s *BookService) ProcessFile(ctx context.Context, content []byte, filename string) (*ProcessResult, error) {
 	if len(content) > MaxFileSize {
 		return nil, ErrFileTooLarge
 	}
@@ -70,9 +77,8 @@ func (s *BookService) ProcessFile(ctx context.Context, content []byte, filename 
 			return nil, fmt.Errorf("failed to parse stored content: %w", err)
 		}
 
-		return &models.UploadResponse{
+		return &ProcessResult{
 			Code: existing.Code,
-			Link: s.buildLink(existing.Code),
 			Book: bookContent,
 		}, nil
 	}
@@ -106,15 +112,17 @@ func (s *BookService) ProcessFile(ctx context.Context, content []byte, filename 
 		return nil, fmt.Errorf("failed to save book: %w", err)
 	}
 
-	return &models.UploadResponse{
+	// Trigger async cleanup (throttled to once per day)
+	s.cleaner.TriggerAsync(ctx)
+
+	return &ProcessResult{
 		Code: code,
-		Link: s.buildLink(code),
 		Book: bookContent,
 	}, nil
 }
 
 // ProcessText processes pasted text and returns a unique code
-func (s *BookService) ProcessText(ctx context.Context, text, title string) (*models.UploadResponse, error) {
+func (s *BookService) ProcessText(ctx context.Context, text, title string) (*ProcessResult, error) {
 	content := []byte(text)
 
 	if len(content) > MaxFileSize {
@@ -135,9 +143,8 @@ func (s *BookService) ProcessText(ctx context.Context, text, title string) (*mod
 			return nil, fmt.Errorf("failed to parse stored content: %w", err)
 		}
 
-		return &models.UploadResponse{
+		return &ProcessResult{
 			Code: existing.Code,
-			Link: s.buildLink(existing.Code),
 			Book: bookContent,
 		}, nil
 	}
@@ -171,9 +178,11 @@ func (s *BookService) ProcessText(ctx context.Context, text, title string) (*mod
 		return nil, fmt.Errorf("failed to save book: %w", err)
 	}
 
-	return &models.UploadResponse{
+	// Trigger async cleanup (throttled to once per day)
+	s.cleaner.TriggerAsync(ctx)
+
+	return &ProcessResult{
 		Code: code,
-		Link: s.buildLink(code),
 		Book: bookContent,
 	}, nil
 }
@@ -205,34 +214,13 @@ func (s *BookService) GetBookByCode(ctx context.Context, code string) (*models.B
 	return bookContent, nil
 }
 
-// CleanupExpiredBooks removes books that haven't been accessed in the TTL period
-func (s *BookService) CleanupExpiredBooks(ctx context.Context) (int64, error) {
-	deleted, err := s.queries.DeleteExpiredBooks(ctx)
+// DeleteExpiredBooks implements CleanupRepository interface
+func (s *BookService) DeleteExpiredBooks(ctx context.Context, cutoff time.Time) (int64, error) {
+	deleted, err := s.queries.DeleteExpiredBooks(ctx, sql.NullTime{Time: cutoff, Valid: true})
 	if err != nil {
 		return 0, fmt.Errorf("failed to cleanup expired books: %w", err)
 	}
 	return deleted, nil
-}
-
-// StartCleanupWorker starts a background worker that periodically cleans up expired books
-func (s *BookService) StartCleanupWorker(ctx context.Context) {
-	ticker := time.NewTicker(CleanupInterval)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				return
-			case <-ticker.C:
-				deleted, err := s.CleanupExpiredBooks(ctx)
-				if err != nil {
-					log.Printf("Cleanup error: %v", err)
-				} else if deleted > 0 {
-					log.Printf("Cleaned up %d expired books", deleted)
-				}
-			}
-		}
-	}()
 }
 
 // GetStats returns basic statistics
@@ -253,11 +241,6 @@ func (s *BookService) codeExists(ctx context.Context, code string) (bool, error)
 		return false, err
 	}
 	return exists == 1, nil
-}
-
-// buildLink constructs the full shareable link
-func (s *BookService) buildLink(code string) string {
-	return fmt.Sprintf("%s/%s", s.baseURL, code)
 }
 
 // isValidCode validates that a code is numeric

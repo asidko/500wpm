@@ -18,13 +18,12 @@ import (
 
 // Config holds application configuration
 type Config struct {
-	Port              int
-	Host              string
-	BaseURL           string
-	DatabasePath      string
-	StaticDir         string
-	RateLimit         float64
-	RateLimitBurst    int
+	Port               int
+	Host               string
+	DatabasePath       string
+	StaticDir          string
+	RateLimitPerMinute int
+	StorageDays        int // 0 = forever, >0 = auto-delete after N days
 }
 
 func main() {
@@ -32,19 +31,15 @@ func main() {
 	cfg := Config{}
 	flag.IntVar(&cfg.Port, "port", 8000, "Server port")
 	flag.StringVar(&cfg.Host, "host", "", "Server host (empty for all interfaces)")
-	flag.StringVar(&cfg.BaseURL, "base-url", "", "Base URL for shareable links (auto-detected if empty)")
 	flag.StringVar(&cfg.DatabasePath, "db", "./books.db", "Path to SQLite database")
 	flag.StringVar(&cfg.StaticDir, "static", "../", "Path to static files directory")
-	flag.Float64Var(&cfg.RateLimit, "rate-limit", 2.0, "API rate limit (requests per second)")
-	flag.IntVar(&cfg.RateLimitBurst, "rate-limit-burst", 5, "Rate limit burst allowance")
+	flag.IntVar(&cfg.RateLimitPerMinute, "rate-limit", 120, "API rate limit per IP (requests per minute)")
+	flag.IntVar(&cfg.StorageDays, "storage-days", 0, "Book storage duration in days (0 = forever)")
 	flag.Parse()
 
 	// Override with environment variables if set
 	if envPort := os.Getenv("PORT"); envPort != "" {
 		fmt.Sscanf(envPort, "%d", &cfg.Port)
-	}
-	if envBaseURL := os.Getenv("BASE_URL"); envBaseURL != "" {
-		cfg.BaseURL = envBaseURL
 	}
 	if envDBPath := os.Getenv("DATABASE_PATH"); envDBPath != "" {
 		cfg.DatabasePath = envDBPath
@@ -53,16 +48,10 @@ func main() {
 		cfg.StaticDir = envStaticDir
 	}
 	if envRateLimit := os.Getenv("RATE_LIMIT"); envRateLimit != "" {
-		fmt.Sscanf(envRateLimit, "%f", &cfg.RateLimit)
+		fmt.Sscanf(envRateLimit, "%d", &cfg.RateLimitPerMinute)
 	}
-
-	// Auto-detect base URL if not set
-	if cfg.BaseURL == "" {
-		if cfg.Host == "" {
-			cfg.BaseURL = fmt.Sprintf("http://localhost:%d", cfg.Port)
-		} else {
-			cfg.BaseURL = fmt.Sprintf("http://%s:%d", cfg.Host, cfg.Port)
-		}
+	if envStorageDays := os.Getenv("STORAGE_DAYS"); envStorageDays != "" {
+		fmt.Sscanf(envStorageDays, "%d", &cfg.StorageDays)
 	}
 
 	// Open database
@@ -74,20 +63,15 @@ func main() {
 
 	log.Printf("Database opened at %s", cfg.DatabasePath)
 
-	// Create book service
-	bookService := service.NewBookService(db, cfg.BaseURL)
-
-	// Start cleanup worker
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	bookService.StartCleanupWorker(ctx)
+	// Create book service with TTL config
+	bookService := service.NewBookService(db, cfg.StorageDays)
 
 	// Create router
 	router := api.NewRouter(api.RouterConfig{
 		BookService: bookService,
 		RateLimit: api.RateLimitConfig{
-			RequestsPerSecond: cfg.RateLimit,
-			Burst:             cfg.RateLimitBurst,
+			RequestsPerMinute: cfg.RateLimitPerMinute,
+			Window:            time.Minute,
 		},
 		StaticDir: cfg.StaticDir,
 	})
@@ -105,9 +89,13 @@ func main() {
 	// Start server in goroutine
 	go func() {
 		log.Printf("Server starting on %s", addr)
-		log.Printf("Base URL: %s", cfg.BaseURL)
 		log.Printf("Static files: %s", cfg.StaticDir)
-		log.Printf("Rate limit: %.1f req/s (burst: %d)", cfg.RateLimit, cfg.RateLimitBurst)
+		log.Printf("Rate limit: %d req/min per IP", cfg.RateLimitPerMinute)
+		if cfg.StorageDays > 0 {
+			log.Printf("Book storage: %d days (auto-cleanup on upload)", cfg.StorageDays)
+		} else {
+			log.Printf("Book storage: forever (no auto-cleanup)")
+		}
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)
@@ -122,10 +110,10 @@ func main() {
 	log.Println("Shutting down server...")
 
 	// Graceful shutdown with timeout
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer shutdownCancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	if err := server.Shutdown(shutdownCtx); err != nil {
+	if err := server.Shutdown(ctx); err != nil {
 		log.Printf("Server shutdown error: %v", err)
 	}
 

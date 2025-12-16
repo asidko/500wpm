@@ -9,7 +9,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/500wpm/backend/internal/models"
 	"github.com/500wpm/backend/internal/service"
 )
 
@@ -62,7 +61,10 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.jsonResponse(w, http.StatusOK, result)
+	h.jsonResponse(w, http.StatusOK, UploadResponse{
+		Code: result.Code,
+		Book: result.Book,
+	})
 }
 
 // UploadText handles pasted text
@@ -93,7 +95,10 @@ func (h *Handler) UploadText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.jsonResponse(w, http.StatusOK, result)
+	h.jsonResponse(w, http.StatusOK, UploadResponse{
+		Code: result.Code,
+		Book: result.Book,
+	})
 }
 
 // GetBook retrieves a book by its code
@@ -120,16 +125,16 @@ func (h *Handler) GetBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.jsonResponse(w, http.StatusOK, models.BookResponse{Book: book})
+	h.jsonResponse(w, http.StatusOK, BookResponse{Book: book})
 }
 
 // Health returns a health check response
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	stats, _ := h.bookService.GetStats(r.Context())
 
-	h.jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"status":     "ok",
-		"bookCount":  stats,
+	h.jsonResponse(w, http.StatusOK, HealthResponse{
+		Status:    "ok",
+		BookCount: stats,
 	})
 }
 
@@ -142,7 +147,7 @@ func (h *Handler) jsonResponse(w http.ResponseWriter, status int, data interface
 
 // errorResponse writes an error response
 func (h *Handler) errorResponse(w http.ResponseWriter, status int, message, details string) {
-	h.jsonResponse(w, status, models.ErrorResponse{
+	h.jsonResponse(w, status, ErrorResponse{
 		Error:   message,
 		Details: details,
 	})

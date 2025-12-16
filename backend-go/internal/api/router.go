@@ -30,12 +30,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	// Create handler
 	handler := NewHandler(cfg.BookService)
 
-	// Create rate limiter
-	rateLimiter := NewRateLimiter(cfg.RateLimit)
-
-	// API routes with rate limiting
+	// API routes with per-IP rate limiting
 	r.Route("/api", func(r chi.Router) {
-		r.Use(rateLimiter.Middleware)
+		r.Use(NewRateLimitMiddleware(cfg.RateLimit))
 
 		// Upload file (EPUB, MOBI, TXT)
 		r.Post("/upload", handler.UploadFile)

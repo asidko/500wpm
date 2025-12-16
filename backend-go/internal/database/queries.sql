@@ -18,7 +18,7 @@ WHERE code = ?;
 SELECT EXISTS(SELECT 1 FROM books WHERE code = ?) AS exists_flag;
 
 -- name: DeleteExpiredBooks :execrows
-DELETE FROM books WHERE last_accessed < datetime('now', '-1 month');
+DELETE FROM books WHERE created_at < ?;
 
 -- name: GetBookCount :one
 SELECT COUNT(*) FROM books;

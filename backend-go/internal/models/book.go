@@ -103,24 +103,6 @@ func countWords(text string) int {
 	return count
 }
 
-// UploadResponse is returned after successful file upload
-type UploadResponse struct {
-	Code string       `json:"code"`
-	Link string       `json:"link"`
-	Book *BookContent `json:"book"`
-}
-
-// BookResponse is returned when fetching a book by code
-type BookResponse struct {
-	Book *BookContent `json:"book"`
-}
-
-// ErrorResponse is returned on errors
-type ErrorResponse struct {
-	Error   string `json:"error"`
-	Details string `json:"details,omitempty"`
-}
-
 // NormalizeText cleans up text content
 func NormalizeText(text string) string {
 	// Normalize line endings

@@ -5,47 +5,26 @@ import (
 	"net/http"
 	"time"
 
-	"golang.org/x/time/rate"
+	"github.com/go-chi/httprate"
 )
 
 // RateLimitConfig holds rate limiting configuration
 type RateLimitConfig struct {
-	RequestsPerSecond float64
-	Burst             int
+	RequestsPerMinute int           // Requests allowed per window per IP
+	Window            time.Duration // Time window for rate limiting
 }
 
 // DefaultRateLimitConfig returns the default rate limit configuration
 func DefaultRateLimitConfig() RateLimitConfig {
 	return RateLimitConfig{
-		RequestsPerSecond: 2.0, // 2 requests per second
-		Burst:             5,   // Allow burst of 5
+		RequestsPerMinute: 120, // 2 requests per second = 120 per minute
+		Window:            time.Minute,
 	}
 }
 
-// RateLimiter implements a global rate limiter
-type RateLimiter struct {
-	limiter *rate.Limiter
-}
-
-// NewRateLimiter creates a new rate limiter
-func NewRateLimiter(cfg RateLimitConfig) *RateLimiter {
-	return &RateLimiter{
-		limiter: rate.NewLimiter(rate.Limit(cfg.RequestsPerSecond), cfg.Burst),
-	}
-}
-
-// Middleware returns a rate limiting middleware
-func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !rl.limiter.Allow() {
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Retry-After", "1")
-			w.WriteHeader(http.StatusTooManyRequests)
-			w.Write([]byte(`{"error":"Rate limit exceeded","details":"Please slow down"}`))
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+// NewRateLimitMiddleware creates a per-IP rate limiting middleware using httprate
+func NewRateLimitMiddleware(cfg RateLimitConfig) func(http.Handler) http.Handler {
+	return httprate.LimitByIP(cfg.RequestsPerMinute, cfg.Window)
 }
 
 // CORS returns a CORS middleware
