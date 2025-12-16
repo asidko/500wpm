@@ -294,14 +294,16 @@ function initHomePage() {
     formData.append('file', file);
     var xhr = new XMLHttpRequest();
     xhr.open('POST', API_BASE_URL + '/api/upload', true);
+    xhr.timeout = 30000; // 30 second timeout
+
     xhr.onload = function () {
       hideLoading();
       if (xhr.status === 200) {
         try {
           var response = JSON.parse(xhr.responseText);
           if (response.code && response.book) {
-            showSuccessMessage(response.code, response.link);
-            storeReadingData(convertBookToChapters(response.book));
+            showSuccessMessage(response.code);
+            storeReadingData(response.code, convertBookToChapters(response.book));
 
             // Auto-navigate after 3 seconds
             setTimeout(function () {
@@ -332,6 +334,10 @@ function initHomePage() {
       hideLoading();
       showError('Cannot connect to server. Please ensure it is running.');
     };
+    xhr.ontimeout = function () {
+      hideLoading();
+      showError('Request timed out. Please try again.');
+    };
     xhr.send(formData);
   }
   function uploadTextToBackend(text) {
@@ -339,14 +345,16 @@ function initHomePage() {
     var xhr = new XMLHttpRequest();
     xhr.open('POST', API_BASE_URL + '/api/text', true);
     xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 30000; // 30 second timeout
+
     xhr.onload = function () {
       hideLoading();
       if (xhr.status === 200) {
         try {
           var response = JSON.parse(xhr.responseText);
           if (response.code && response.book) {
-            showSuccessMessage(response.code, response.link);
-            storeReadingData(convertBookToChapters(response.book));
+            showSuccessMessage(response.code);
+            storeReadingData(response.code, convertBookToChapters(response.book));
 
             // Auto-navigate after 3 seconds
             setTimeout(function () {
@@ -370,6 +378,10 @@ function initHomePage() {
       hideLoading();
       showError('Cannot connect to server. Please ensure it is running.');
     };
+    xhr.ontimeout = function () {
+      hideLoading();
+      showError('Request timed out. Please try again.');
+    };
     xhr.send(JSON.stringify({
       text: text
     }));
@@ -378,13 +390,15 @@ function initHomePage() {
     showLoading();
     var xhr = new XMLHttpRequest();
     xhr.open('GET', API_BASE_URL + '/api/book/' + code, true);
+    xhr.timeout = 30000; // 30 second timeout
+
     xhr.onload = function () {
       hideLoading();
       if (xhr.status === 200) {
         try {
           var response = JSON.parse(xhr.responseText);
           if (response.book) {
-            storeReadingData(convertBookToChapters(response.book));
+            storeReadingData(code, convertBookToChapters(response.book));
             window.location.href = 'reader.html';
           } else {
             showError('Book not found.');
@@ -404,6 +418,10 @@ function initHomePage() {
       hideLoading();
       showError('Cannot connect to server. Please ensure it is running.');
     };
+    xhr.ontimeout = function () {
+      hideLoading();
+      showError('Request timed out. Please try again.');
+    };
     xhr.send();
   }
   function convertBookToChapters(book) {
@@ -421,7 +439,8 @@ function initHomePage() {
     }
     return chapters;
   }
-  function showSuccessMessage(code, link) {
+  function showSuccessMessage(code) {
+    var link = window.location.origin + '/' + code;
     bookCode.textContent = code;
     bookLink.textContent = link;
     bookLink.href = link;
@@ -445,12 +464,18 @@ function initHomePage() {
     loading.className = 'loading';
     startButton.disabled = false;
   }
-  function storeReadingData(chapters) {
+  function storeReadingData(code, chapters) {
     try {
-      localStorage.setItem('readingData', JSON.stringify(chapters));
+      localStorage.setItem('readingData', JSON.stringify({
+        code: code,
+        chapters: chapters
+      }));
     } catch (e) {
       // Fallback for browsers without localStorage
-      window.readingData = chapters;
+      window.readingData = {
+        code: code,
+        chapters: chapters
+      };
     }
   }
 }
@@ -461,14 +486,28 @@ function initHomePage() {
 
 function initReaderPage() {
   // Load reading data
+  var bookCode = null;
   var chapters = null;
   try {
     var stored = localStorage.getItem('readingData');
     if (stored) {
-      chapters = JSON.parse(stored);
+      var data = JSON.parse(stored);
+      // Handle both new format {code, chapters} and legacy format [chapters]
+      if (data.code && data.chapters) {
+        bookCode = data.code;
+        chapters = data.chapters;
+      } else if (Array.isArray(data)) {
+        chapters = data;
+      }
     }
   } catch (e) {
-    chapters = window.readingData || null;
+    var fallback = window.readingData || null;
+    if (fallback && fallback.code) {
+      bookCode = fallback.code;
+      chapters = fallback.chapters;
+    } else if (Array.isArray(fallback)) {
+      chapters = fallback;
+    }
   }
   if (!chapters || chapters.length === 0) {
     alert('No reading data found. Returning to home page.');
@@ -476,17 +515,32 @@ function initReaderPage() {
     return;
   }
 
+  // Load saved progress for this book
+  var savedProgress = null;
+  if (bookCode) {
+    try {
+      var progressKey = 'progress_' + bookCode;
+      var progressData = localStorage.getItem(progressKey);
+      if (progressData) {
+        savedProgress = JSON.parse(progressData);
+      }
+    } catch (e) {
+      // Ignore progress load errors
+    }
+  }
+
   // Reader state
   var state = {
+    bookCode: bookCode,
     chapters: chapters,
-    currentChapterIndex: 0,
+    currentChapterIndex: savedProgress ? savedProgress.chapterIndex : 0,
     allWords: [],
-    currentWordIndex: 0,
-    targetSpeed: 500,
+    currentWordIndex: savedProgress ? savedProgress.wordIndex : 0,
+    targetSpeed: savedProgress ? savedProgress.speed : 500,
     isPlaying: false,
     timer: null,
     startTime: null,
-    totalElapsedTime: 0
+    totalElapsedTime: savedProgress ? savedProgress.elapsedTime : 0
   };
 
   // Prepare all words with chapter boundaries
@@ -523,6 +577,12 @@ function initReaderPage() {
   updateSpeedDisplay();
   updateProgressDisplay();
   renderChapterList();
+
+  // Show correct word if resuming from saved progress
+  if (state.currentWordIndex > 0 && state.currentWordIndex < state.allWords.length) {
+    wordDisplay.textContent = state.allWords[state.currentWordIndex].word;
+    state.currentChapterIndex = state.allWords[state.currentWordIndex].chapterIndex;
+  }
   pause();
 
   // Event listeners
@@ -637,6 +697,30 @@ function initReaderPage() {
     readerContainer.className = 'reader-container reader paused';
     playPauseButton.innerHTML = '&#9654; Play';
     updateChapterInfo();
+    saveProgress();
+  }
+  function saveProgress() {
+    if (!state.bookCode) return;
+    try {
+      var progressKey = 'progress_' + state.bookCode;
+      localStorage.setItem(progressKey, JSON.stringify({
+        wordIndex: state.currentWordIndex,
+        chapterIndex: state.currentChapterIndex,
+        speed: state.targetSpeed,
+        elapsedTime: state.totalElapsedTime
+      }));
+    } catch (e) {
+      // Ignore save errors (quota exceeded, etc.)
+    }
+  }
+  function clearProgress() {
+    if (!state.bookCode) return;
+    try {
+      var progressKey = 'progress_' + state.bookCode;
+      localStorage.removeItem(progressKey);
+    } catch (e) {
+      // Ignore clear errors
+    }
   }
   function togglePlayPause() {
     if (state.isPlaying) {
@@ -805,6 +889,8 @@ function initReaderPage() {
   }
   function showReadingComplete() {
     pause();
+    clearProgress(); // Book finished, clear saved progress
+
     var totalWords = state.allWords.length;
     var timeTaken = state.totalElapsedTime + (state.startTime ? Date.now() - state.startTime : 0);
 
