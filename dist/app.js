@@ -213,8 +213,14 @@ function initHomePage() {
   var successMessage = document.getElementById('successMessage');
   var bookCode = document.getElementById('bookCode');
   var bookLink = document.getElementById('bookLink');
+  var startReadingBtn = document.getElementById('startReadingBtn');
   var serverWarning = document.getElementById('serverWarning');
   var codeTab = null;
+
+  // Start reading button click handler
+  addEvent(startReadingBtn, 'click', function () {
+    window.location.href = 'reader.html';
+  });
 
   // Find the code tab
   for (var i = 0; i < modeTabs.length; i++) {
@@ -420,11 +426,7 @@ function initHomePage() {
           if (response.code && response.book) {
             showSuccessMessage(response.code);
             storeReadingData(response.code, convertBookToChapters(response.book));
-
-            // Auto-navigate after 3 seconds
-            setTimeout(function () {
-              window.location.href = 'reader.html';
-            }, 3000);
+            // User clicks "Start Reading" button manually
           } else if (response.error) {
             showError(response.error + (response.details ? ': ' + response.details : ''));
           } else {
@@ -471,11 +473,7 @@ function initHomePage() {
           if (response.code && response.book) {
             showSuccessMessage(response.code);
             storeReadingData(response.code, convertBookToChapters(response.book));
-
-            // Auto-navigate after 3 seconds
-            setTimeout(function () {
-              window.location.href = 'reader.html';
-            }, 3000);
+            // User clicks "Start Reading" button manually
           } else if (response.error) {
             showError(response.error);
           } else {
@@ -627,7 +625,7 @@ function initReaderPage() {
   }
   if (!chapters || chapters.length === 0) {
     alert('No reading data found. Returning to home page.');
-    window.location.href = 'index.html';
+    window.location.href = '/';
     return;
   }
 
@@ -1033,7 +1031,7 @@ function initReaderPage() {
     } catch (e) {
       window.readingData = null;
     }
-    window.location.href = 'index.html';
+    window.location.href = '/';
   }
 }
 
