@@ -168,6 +168,31 @@ function extractCodeFromInput(input) {
 }
 
 // ============================================================================
+// SERVER DETECTION
+// ============================================================================
+
+var serverAvailable = false;
+function checkServerHealth(callback) {
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', API_BASE_URL + '/health', true);
+  xhr.timeout = 3000; // 3 second timeout for health check
+
+  xhr.onload = function () {
+    serverAvailable = xhr.status === 200;
+    if (callback) callback(serverAvailable);
+  };
+  xhr.onerror = function () {
+    serverAvailable = false;
+    if (callback) callback(false);
+  };
+  xhr.ontimeout = function () {
+    serverAvailable = false;
+    if (callback) callback(false);
+  };
+  xhr.send();
+}
+
+// ============================================================================
 // HOME PAGE CONTROLLER
 // ============================================================================
 
@@ -188,20 +213,59 @@ function initHomePage() {
   var successMessage = document.getElementById('successMessage');
   var bookCode = document.getElementById('bookCode');
   var bookLink = document.getElementById('bookLink');
+  var serverWarning = document.getElementById('serverWarning');
+  var codeTab = null;
+
+  // Find the code tab
+  for (var i = 0; i < modeTabs.length; i++) {
+    if (modeTabs[i].getAttribute('data-mode') === 'code') {
+      codeTab = modeTabs[i];
+      break;
+    }
+  }
   var currentMode = 'paste';
   var selectedFile = null;
+
+  // Check server availability on load
+  checkServerHealth(function (available) {
+    updateServerUI(available);
+  });
+  function updateServerUI(available) {
+    if (!available && serverWarning) {
+      serverWarning.className = 'server-warning visible';
+      // Disable code tab when server unavailable
+      if (codeTab) {
+        codeTab.className = 'mode-tab disabled';
+        codeTab.setAttribute('title', 'Requires server connection');
+      }
+    } else if (serverWarning) {
+      serverWarning.className = 'server-warning';
+      if (codeTab) {
+        codeTab.className = 'mode-tab';
+        codeTab.removeAttribute('title');
+      }
+    }
+  }
 
   // Mode tab switching
   for (var i = 0; i < modeTabs.length; i++) {
     addEvent(modeTabs[i], 'click', function () {
       var mode = this.getAttribute('data-mode');
+
+      // Prevent switching to code tab when server unavailable
+      if (mode === 'code' && !serverAvailable) {
+        showError('Share codes require a server connection. Use paste or file upload instead.');
+        return;
+      }
       currentMode = mode;
 
-      // Update tab styles
+      // Update tab styles (preserve disabled state)
       for (var j = 0; j < modeTabs.length; j++) {
-        modeTabs[j].className = 'mode-tab';
+        var tab = modeTabs[j];
+        var isDisabled = tab.className.indexOf('disabled') !== -1;
+        tab.className = isDisabled ? 'mode-tab disabled' : 'mode-tab';
       }
-      this.className = 'mode-tab active';
+      this.className = this.className.indexOf('disabled') !== -1 ? 'mode-tab disabled active' : 'mode-tab active';
 
       // Update input areas
       for (var j = 0; j < inputModes.length; j++) {
@@ -252,8 +316,14 @@ function initHomePage() {
       return;
     }
 
-    // Upload to backend to get a code
-    uploadTextToBackend(text);
+    // Store directly in localStorage and go to reader (no server needed)
+    var chapters = [{
+      title: 'Pasted Text',
+      text: text,
+      word_count: words.length
+    }];
+    storeReadingData(null, chapters);
+    window.location.href = 'reader.html';
   }
   function handleUploadMode() {
     if (!selectedFile) {
@@ -261,19 +331,65 @@ function initHomePage() {
       return;
     }
     var fileName = selectedFile.name.toLowerCase();
-    var supportedExtensions = ['.txt', '.epub', '.mobi', '.azw', '.azw3', '.prc'];
-    var isSupported = false;
-    for (var i = 0; i < supportedExtensions.length; i++) {
-      if (fileName.indexOf(supportedExtensions[i], fileName.length - supportedExtensions[i].length) !== -1) {
-        isSupported = true;
+
+    // Check if it's a .txt file (can be parsed offline)
+    if (fileName.indexOf('.txt', fileName.length - 4) !== -1) {
+      parseTextFileOffline(selectedFile);
+      return;
+    }
+
+    // Check for epub/mobi formats (require server)
+    var serverFormats = ['.epub', '.mobi', '.azw', '.azw3', '.prc'];
+    var needsServer = false;
+    for (var i = 0; i < serverFormats.length; i++) {
+      if (fileName.indexOf(serverFormats[i], fileName.length - serverFormats[i].length) !== -1) {
+        needsServer = true;
         break;
       }
     }
-    if (!isSupported) {
-      showError('Unsupported file format. Please use .txt, .epub, or .mobi files.');
+    if (needsServer) {
+      // Try backend, with graceful fallback message
+      uploadFileToBackend(selectedFile);
       return;
     }
-    uploadFileToBackend(selectedFile);
+    showError('Unsupported file format. Use .txt for offline reading, or .epub/.mobi with server.');
+  }
+  function parseTextFileOffline(file) {
+    // Check if FileReader is available (may not be on very old Kindle browsers)
+    if (typeof FileReader === 'undefined') {
+      showError('Your browser does not support file reading. Please paste text instead.');
+      return;
+    }
+    showLoading();
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      hideLoading();
+      var text = e.target.result;
+      if (!text || !text.trim()) {
+        showError('File is empty.');
+        return;
+      }
+      var words = tokenizeText(text);
+      if (words.length === 0) {
+        showError('No readable text found in file.');
+        return;
+      }
+
+      // Extract filename without extension for title
+      var title = file.name.replace(/\.txt$/i, '') || 'Uploaded Text';
+      var chapters = [{
+        title: title,
+        text: text,
+        word_count: words.length
+      }];
+      storeReadingData(null, chapters);
+      window.location.href = 'reader.html';
+    };
+    reader.onerror = function () {
+      hideLoading();
+      showError('Failed to read file.');
+    };
+    reader.readAsText(file);
   }
   function handleCodeMode() {
     var input = document.getElementById('codeInput').value.trim();
@@ -332,7 +448,7 @@ function initHomePage() {
     };
     xhr.onerror = function () {
       hideLoading();
-      showError('Cannot connect to server. Please ensure it is running.');
+      showError('Server unavailable. EPUB/MOBI files require a backend server. Try pasting text or uploading a .txt file instead.');
     };
     xhr.ontimeout = function () {
       hideLoading();
@@ -416,7 +532,7 @@ function initHomePage() {
     };
     xhr.onerror = function () {
       hideLoading();
-      showError('Cannot connect to server. Please ensure it is running.');
+      showError('Server unavailable. Share codes require a backend server. Try pasting text or uploading a .txt file instead.');
     };
     xhr.ontimeout = function () {
       hideLoading();
@@ -493,8 +609,8 @@ function initReaderPage() {
     if (stored) {
       var data = JSON.parse(stored);
       // Handle both new format {code, chapters} and legacy format [chapters]
-      if (data.code && data.chapters) {
-        bookCode = data.code;
+      if (data.chapters) {
+        bookCode = data.code || null;
         chapters = data.chapters;
       } else if (Array.isArray(data)) {
         chapters = data;
@@ -502,8 +618,8 @@ function initReaderPage() {
     }
   } catch (e) {
     var fallback = window.readingData || null;
-    if (fallback && fallback.code) {
-      bookCode = fallback.code;
+    if (fallback && fallback.chapters) {
+      bookCode = fallback.code || null;
       chapters = fallback.chapters;
     } else if (Array.isArray(fallback)) {
       chapters = fallback;

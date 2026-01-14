@@ -2,6 +2,12 @@
 
 Minimalist web-based speed reading app using RSVP (Rapid Serial Visual Presentation). Read faster by displaying one word at a time.
 
+**[Try it on GitHub Pages](https://asidko.github.io/500wpm/)** - works offline, no server needed for basic reading.
+
+![Home Page](screenshots/home-offline.png)
+
+![Reader](screenshots/reader-midread.png)
+
 ## Why?
 
 Inspired by this post on X:
@@ -13,8 +19,9 @@ An average 250-page book will be read in about **2 hours and 5 minutes** at a re
 ## Features
 
 - RSVP reading with 10-word warm-up (100→500 WPM)
+- **Offline mode**: Paste text or upload .txt files without server
 - Three input modes: paste text, upload files (.txt/.epub/.mobi), or enter share code
-- **Share codes**: Upload once, read anywhere with a 6-digit code
+- **Share codes**: Upload once, read anywhere with a 6-digit code (requires server)
 - Adjustable speed: 100-1000 WPM (±50 WPM steps)
 - Navigation: skip ±10 words
 - Keyboard shortcuts: `Space` (play/pause), `↑↓` (speed), `←→` (navigate)
